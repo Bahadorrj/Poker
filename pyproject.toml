@@ -33,6 +33,7 @@ venv = ".venv"
 
 [tool.pytest]
 asyncio_mode = "auto"
+
 [tool.commitizen]
 name = "cz_conventional_commits"
 tag_format = "$version"
