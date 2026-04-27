@@ -68,7 +68,7 @@ async def get_player(
         id=player.id,
         table_id=player.table.id,
         username=player.user.username,
-        cash_in=player.cash_in,
+        buy_in=player.buy_in,
         cash_out=player.cash_out,
     )
 
@@ -98,7 +98,7 @@ async def charge_player(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Table already finished"
         )
 
-    player.cash_in += amount
+    player.buy_in += amount
 
     await session.commit()
 

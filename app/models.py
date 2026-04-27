@@ -57,7 +57,7 @@ class Player(Base):
     table_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("game_tables.id")
     )
-    cash_in: Mapped[int] = mapped_column(Integer, default=0)
+    buy_in: Mapped[int] = mapped_column(Integer, default=0)
     cash_out: Mapped[int] = mapped_column(Integer, default=0)
     is_playing: Mapped[bool] = mapped_column(Boolean, default=True)
 
@@ -88,7 +88,7 @@ class GameTable(Base):
     )
 
     bank: Mapped[int] = column_property(
-        select(func.coalesce(func.sum(Player.cash_in), 0))
+        select(func.coalesce(func.sum(Player.buy_in), 0))
         .where(Player.table_id == id)
         .correlate_except(Player)
         .scalar_subquery()

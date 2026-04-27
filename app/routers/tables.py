@@ -114,7 +114,7 @@ async def get_table_players(
             id=p.id,
             table_id=table.id,
             username=p.user.username,
-            cash_in=p.cash_in,
+            buy_in=p.buy_in,
             cash_out=p.cash_out,
         )
         for p in players
@@ -122,7 +122,7 @@ async def get_table_players(
 
 
 def get_transactions(players: Iterable[PlayerResponse]) -> list[TransactionResponse]:
-    net_balances = {p.username: p.cash_out - p.cash_in for p in players}
+    net_balances = {p.username: p.cash_out - p.buy_in for p in players}
     positives = {k: v for k, v in net_balances.items() if v > 0}
     negatives = {k: -v for k, v in net_balances.items() if v < 0}
 
@@ -173,7 +173,7 @@ async def get_table_result(
             id=p.id,
             table_id=table.id,
             username=p.user.username,
-            cash_in=p.cash_in,
+            buy_in=p.buy_in,
             cash_out=p.cash_out,
         )
         for p in players

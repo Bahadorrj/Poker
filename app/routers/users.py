@@ -60,7 +60,7 @@ async def get_history_response(session: AsyncSession, user: User):
         select(Player).filter_by(user_id=user.id).options(selectinload(Player.table))
     )
     players = result.scalars().all()
-    net_balance = sum(p.cash_out - p.cash_in for p in players)
+    net_balance = sum(p.cash_out - p.buy_in for p in players)
 
     # Time
     tables = [p.table for p in players]
@@ -84,7 +84,7 @@ async def get_history_response(session: AsyncSession, user: User):
             id=p.id,
             table_id=p.table.id,
             username=user.username,
-            cash_in=p.cash_in,
+            buy_in=p.buy_in,
             cash_out=p.cash_out,
         )
         for p in players

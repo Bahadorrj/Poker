@@ -21,7 +21,7 @@ class PlayerResponse(BaseModel):
     id: uuid.UUID
     table_id: uuid.UUID
     username: str = Field(max_length=256)
-    cash_in: int = Field(ge=0)
+    buy_in: int = Field(ge=0)
     cash_out: int = Field(ge=0)
 
 

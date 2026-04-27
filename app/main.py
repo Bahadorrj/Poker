@@ -67,7 +67,7 @@ async def get_leaderboard(
             leaderboard[user.username] = 0
 
         for player in user.players:
-            net_balance = player.cash_out - player.cash_in
+            net_balance = player.cash_out - player.buy_in
             leaderboard[user.username] += net_balance
 
     return dict(sorted(leaderboard.items(), key=lambda item: item[1]))
