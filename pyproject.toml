@@ -30,3 +30,6 @@ test = [
 [tool.pyright]
 venvPath = "."
 venv = ".venv"
+
+[tool.pytest]
+asyncio_mode = "auto"
