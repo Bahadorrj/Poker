@@ -64,13 +64,7 @@ async def get_player(
 ) -> PlayerResponse:
     player = await get_player_model(player_id, session)
 
-    return PlayerResponse(
-        id=player.id,
-        table_id=player.table.id,
-        username=player.user.username,
-        buy_in=player.buy_in,
-        cash_out=player.cash_out,
-    )
+    return PlayerResponse.model_validate(player)
 
 
 @router.put("/{player_id}/charge", status_code=status.HTTP_204_NO_CONTENT)

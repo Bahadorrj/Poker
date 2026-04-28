@@ -53,17 +53,7 @@ async def get_tables(
     )
     tables: list[GameTable] = [row[0] for row in result.all()]
 
-    return [
-        TableResponse(
-            id=t.id,
-            user_id=t.user_id,
-            bank=t.bank,
-            finished=t.finished,
-            started_at=t.started_at,
-            finished_at=t.finished_at,
-        )
-        for t in tables
-    ]
+    return [TableResponse.model_validate(t) for t in tables]
 
 
 async def get_table_model(table_id: str, session: AsyncSession) -> GameTable:
@@ -91,14 +81,7 @@ async def get_table(
 ) -> TableResponse:
     table = await get_table_model(table_id, session)
 
-    return TableResponse(
-        id=table.id,
-        user_id=table.user_id,
-        bank=table.bank,
-        finished=table.finished,
-        started_at=table.started_at,
-        finished_at=table.finished_at,
-    )
+    return TableResponse.model_validate(table)
 
 
 @router.get("/{table_id}/players", description="Get all players in the target table")
@@ -109,16 +92,7 @@ async def get_table_players(
     table = await get_table_model(table_id, session)
     players = table.players
 
-    return [
-        PlayerResponse(
-            id=p.id,
-            table_id=table.id,
-            username=p.user.username,
-            buy_in=p.buy_in,
-            cash_out=p.cash_out,
-        )
-        for p in players
-    ]
+    return [PlayerResponse.model_validate(p) for p in players]
 
 
 def get_transactions(players: Iterable[PlayerResponse]) -> list[TransactionResponse]:
@@ -159,25 +133,9 @@ async def get_table_result(
     table = await get_table_model(table_id, session)
     players = table.players
 
-    table_response = TableResponse(
-        id=table.id,
-        user_id=table.user_id,
-        bank=table.bank,
-        finished=table.finished,
-        started_at=table.started_at,
-        finished_at=table.finished_at,
-    )
+    table_response = TableResponse.model_validate(table)
 
-    transactions = get_transactions(
-        PlayerResponse(
-            id=p.id,
-            table_id=table.id,
-            username=p.user.username,
-            buy_in=p.buy_in,
-            cash_out=p.cash_out,
-        )
-        for p in players
-    )
+    transactions = get_transactions(PlayerResponse.model_validate(p) for p in players)
 
     return ResultResponse(table=table_response, transactions=transactions)
 

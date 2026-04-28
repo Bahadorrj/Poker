@@ -1,7 +1,7 @@
 import datetime
 import uuid
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from fastapi_users import schemas
 
 
@@ -17,7 +17,11 @@ class UserUpdate(schemas.BaseUserUpdate):
     username: str = Field(max_length=256)
 
 
-class PlayerResponse(BaseModel):
+class PokerBaseModel(BaseModel):
+    model_config = ConfigDict(extra="ignore", from_attributes=True)
+
+
+class PlayerResponse(PokerBaseModel):
     id: uuid.UUID
     table_id: uuid.UUID
     username: str = Field(max_length=256)
@@ -25,13 +29,13 @@ class PlayerResponse(BaseModel):
     cash_out: int = Field(ge=0)
 
 
-class UserHistoryResponse(BaseModel):
+class UserHistoryResponse(PokerBaseModel):
     history: list[PlayerResponse]
     net_balance: int
     total_time: datetime.time
 
 
-class TableResponse(BaseModel):
+class TableResponse(PokerBaseModel):
     id: uuid.UUID
     user_id: uuid.UUID
     bank: int = Field(ge=0)
@@ -40,12 +44,12 @@ class TableResponse(BaseModel):
     finished_at: datetime.datetime | None = None
 
 
-class TransactionResponse(BaseModel):
+class TransactionResponse(PokerBaseModel):
     giver: str
     getter: str
     money: int = Field(gt=0)
 
 
-class ResultResponse(BaseModel):
+class ResultResponse(PokerBaseModel):
     table: TableResponse
     transactions: list[TransactionResponse]

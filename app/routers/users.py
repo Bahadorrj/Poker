@@ -79,16 +79,7 @@ async def get_history_response(session: AsyncSession, user: User):
     seconds = rest.seconds
     total_time = datetime.time(hour=hours, minute=minutes, second=seconds)
 
-    history = [
-        PlayerResponse(
-            id=p.id,
-            table_id=p.table.id,
-            username=user.username,
-            buy_in=p.buy_in,
-            cash_out=p.cash_out,
-        )
-        for p in players
-    ]
+    history = [PlayerResponse.model_validate(p) for p in players]
 
     return UserHistoryResponse(
         history=history,

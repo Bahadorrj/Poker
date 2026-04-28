@@ -68,6 +68,13 @@ class Player(Base):
         User, back_populates="players", foreign_keys=[user_id]
     )
 
+    username: Mapped[str] = column_property(
+        select(User.username)
+        .where(User.id == user_id)
+        .correlate_except(User)
+        .scalar_subquery()
+    )
+
 
 class GameTable(Base):
     __tablename__ = "game_tables"
