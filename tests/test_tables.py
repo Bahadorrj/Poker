@@ -7,6 +7,7 @@ def make_player(username: str, buy_in: int, cash_out: int) -> PlayerResponse:
     return PlayerResponse(
         id=uuid.uuid4(),
         table_id=uuid.uuid4(),
+        user_id=uuid.uuid4(),
         username=username,
         buy_in=buy_in,
         cash_out=cash_out,
