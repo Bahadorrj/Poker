@@ -27,6 +27,7 @@ class PlayerResponse(PokerBaseModel):
     username: str = Field(max_length=256)
     buy_in: int = Field(ge=0)
     cash_out: int = Field(ge=0)
+    is_playing: bool = True
 
 
 class UserHistoryResponse(PokerBaseModel):
