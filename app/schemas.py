@@ -24,6 +24,7 @@ class PokerBaseModel(BaseModel):
 class PlayerResponse(PokerBaseModel):
     id: uuid.UUID
     table_id: uuid.UUID
+    user_id: uuid.UUID
     username: str = Field(max_length=256)
     buy_in: int = Field(ge=0)
     cash_out: int = Field(ge=0)
