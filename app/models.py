@@ -3,14 +3,14 @@ import uuid
 
 from fastapi_users.db import SQLAlchemyBaseUserTableUUID
 from sqlalchemy import (
-    String,
+    Boolean,
     DateTime,
     ForeignKey,
     Integer,
-    Boolean,
+    String,
+    Uuid,
     func,
     select,
-    Uuid,
 )
 from sqlalchemy.orm import (
     DeclarativeBase,
@@ -42,6 +42,15 @@ class User(SQLAlchemyBaseUserTableUUID, Base):
     )
     players: Mapped[list["Player"]] = relationship(
         "Player", back_populates="user", cascade="all, delete-orphan"
+    )
+    clubs: Mapped[list["Club"]] = relationship(
+        "Club", back_populates="owner", cascade="all, delete-orphan"
+    )
+
+    member_of_clubs: Mapped[list["Club"]] = relationship(
+        "Club",
+        secondary="ClubMembers",
+        back_populates="members",
     )
 
 
@@ -86,6 +95,10 @@ class GameTable(Base):
         Uuid(as_uuid=True),
         ForeignKey("users.id"),
     )
+    club_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("clubs.id"),
+    )
     finished: Mapped[bool] = mapped_column(Boolean, default=False)
     started_at: Mapped[datetime.datetime] = mapped_column(
         DateTime, default=datetime.datetime.now
@@ -105,3 +118,47 @@ class GameTable(Base):
         User, back_populates="tables", foreign_keys=[owner_id]
     )
     players: Mapped[list[Player]] = relationship(Player, back_populates="table")
+    club: Mapped["Club"] = relationship(
+        "Club", foreign_keys=[club_id], back_populates="tables"
+    )
+
+
+class Club(Base):
+    __tablename__ = "clubs"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    name: Mapped[str] = mapped_column(String, unique=True)
+    # Owner (one-to-many)
+    owner_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("users.id"),
+    )
+    opened_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, default=datetime.datetime.now
+    )
+
+    owner: Mapped["User"] = relationship(
+        "User",
+        back_populates="clubs",
+        foreign_keys=[owner_id],
+    )
+    # Members (many-to-many)
+    members: Mapped[list[User]] = relationship(
+        "User",
+        secondary="ClubMembers",
+        back_populates="member_of_clubs",
+    )
+    tables: Mapped[list[GameTable]] = relationship("GameTable", back_populates="club")
+
+
+class ClubMember(Base):
+    __tablename__ = "club_members"
+
+    club_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("clubs.id"), primary_key=True
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("users.id"), primary_key=True
+    )

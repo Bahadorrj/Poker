@@ -1,12 +1,14 @@
 import datetime
 import uuid
-from typing import Iterable
+from typing import Any, Iterable
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from starlette import status
+
+from app.routers.players import get_player_model
 
 from ..db import get_async_session
 from ..models import GameTable, Player, User
@@ -21,49 +23,19 @@ from .auth import current_active_user
 router = APIRouter(prefix="/tables", tags=["tables"])
 
 
-@router.post("/", status_code=status.HTTP_201_CREATED)
-async def open_table(
-    join_as_player: bool,
-    user: User = Depends(current_active_user),
-    session: AsyncSession = Depends(get_async_session),
-) -> uuid.UUID:
-    table = GameTable(user_id=user.id)
-    session.add(table)
-
-    await session.commit()
-    await session.refresh(table)
-
-    if join_as_player:
-        from .players import join_table
-
-        await join_table(str(table.id), user, session)
-
-    return table.id
-
-
-@router.get("/")
-async def get_tables(
-    user: User = Depends(current_active_user),
-    session: AsyncSession = Depends(get_async_session),
-) -> list[TableResponse]:
-    result = await session.execute(
-        select(GameTable)
-        .filter_by(user_id=user.id)
-        .order_by(GameTable.started_at.desc())
-    )
-    tables: list[GameTable] = [row[0] for row in result.all()]
-
-    return [TableResponse.model_validate(t) for t in tables]
-
-
-async def get_table_model(table_id: str, session: AsyncSession) -> GameTable:
+async def get_table_model(
+    table_id: str,
+    session: AsyncSession,
+    *options: Any,
+) -> GameTable:
     table_uuid = uuid.UUID(table_id)
 
-    result = await session.execute(
-        select(GameTable)
-        .where(GameTable.id == table_uuid)
-        .options(selectinload(GameTable.players).selectinload(Player.user))
-    )
+    stmt = select(GameTable).where(GameTable.id == table_uuid)
+
+    if options:
+        stmt = stmt.options(*options)
+
+    result = await session.execute(stmt)
     table = result.scalars().first()
 
     if table is None:
@@ -79,76 +51,24 @@ async def get_table(
     table_id: str,
     session: AsyncSession = Depends(get_async_session),
 ) -> TableResponse:
-    table = await get_table_model(table_id, session)
-
-    return TableResponse.model_validate(table)
+    return TableResponse.model_validate(await get_table_model(table_id, session))
 
 
-@router.get("/{table_id}/players", description="Get all players in the target table")
-async def get_table_players(
-    table_id: str,
-    session: AsyncSession = Depends(get_async_session),
-) -> list[PlayerResponse]:
-    table = await get_table_model(table_id, session)
-    players = table.players
-
-    return [PlayerResponse.model_validate(p) for p in players]
-
-
-def get_transactions(players: Iterable[PlayerResponse]) -> list[TransactionResponse]:
-    net_balances = {p.username: p.cash_out - p.buy_in for p in players}
-    positives = {k: v for k, v in net_balances.items() if v > 0}
-    negatives = {k: -v for k, v in net_balances.items() if v < 0}
-
-    transactions = []
-    for getter, money in positives.items():
-        for giver, debt in negatives.items():
-            if debt == 0:
-                continue
-
-            if money >= debt:
-                transactions.append(
-                    TransactionResponse(giver=giver, getter=getter, money=debt)
-                )
-                negatives[giver] = 0
-                money -= debt
-            elif 0 < money < debt:
-                transactions.append(
-                    TransactionResponse(giver=giver, getter=getter, money=money)
-                )
-                negatives[giver] = debt - money
-                money = 0
-
-            if money == 0:
-                break
-
-    return transactions
-
-
-@router.get("/{table_id}/result")
-async def get_table_result(
-    table_id: str,
-    session: AsyncSession = Depends(get_async_session),
-) -> ResultResponse:
-    table = await get_table_model(table_id, session)
-    players = table.players
-
-    table_response = TableResponse.model_validate(table)
-
-    transactions = get_transactions(PlayerResponse.model_validate(p) for p in players)
-
-    return ResultResponse(table=table_response, transactions=transactions)
-
-
-@router.put("/{table_id}/close", status_code=status.HTTP_204_NO_CONTENT)
+@router.put("/{table_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def close_table(
     table_id: str,
     user: User = Depends(current_active_user),
     session: AsyncSession = Depends(get_async_session),
 ) -> None:
-    table = await get_table_model(table_id, session)
+    table = await get_table_model(
+        table_id, session, selectinload(GameTable.players).selectinload(Player.user)
+    )
 
-    if not user.is_superuser and table.owner_id != user.id:
+    if (
+        not user.is_superuser  # Admin
+        and table.owner_id != user.id  # Table owner
+        and table.club.owner_id != user.id  # Club owner
+    ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="You do not have permission to close this table",
@@ -182,7 +102,11 @@ async def delete_table(
 ):
     table = await get_table_model(table_id, session)
 
-    if not user.is_superuser and table.owner_id != user.id:
+    if (
+        not user.is_superuser  # Admin
+        and table.owner_id != user.id  # Table owner
+        and table.club.owner_id != user.id  # Club owner
+    ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="You do not have permission to delete this table",
@@ -190,3 +114,171 @@ async def delete_table(
 
     await session.delete(table)
     await session.commit()
+
+
+@router.post("/{table_id}/players", status_code=status.HTTP_201_CREATED)
+async def join_table(
+    table_id: str,
+    user: User = Depends(current_active_user),
+    session: AsyncSession = Depends(get_async_session),
+) -> uuid.UUID:
+    table = await get_table_model(table_id, session)
+
+    if table.finished:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Table already finished"
+        )
+
+    # Check player does not exist
+    existing = await session.scalar(
+        select(Player).where(
+            Player.user_id == user.id,
+        )
+    )
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Player already exists",
+        )
+
+    # TODO: send a request to table owner to approve the new player before adding them
+
+    player = Player(user_id=user.id, table_id=table.id)
+    session.add(player)
+
+    await session.commit()
+    await session.refresh(player)
+
+    return player.id
+
+
+@router.get("/{table_id}/players", description="Get all players in the target table")
+async def get_table_players(
+    table_id: str,
+    session: AsyncSession = Depends(get_async_session),
+) -> list[PlayerResponse]:
+    table = await get_table_model(
+        table_id, session, selectinload(GameTable.players).selectinload(Player.user)
+    )
+
+    return [PlayerResponse.model_validate(p) for p in table.players]
+
+
+@router.put("/{table_id}/players", status_code=status.HTTP_204_NO_CONTENT)
+async def leave_table(
+    table_id: str,
+    cash_out: int = Query(ge=0),
+    user: User = Depends(current_active_user),
+    session: AsyncSession = Depends(get_async_session),
+):
+    table = await get_table_model(table_id, session)
+
+    if table.finished:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Table already finished"
+        )
+
+    result = await session.execute(select(Player).where(Player.user_id == user.id))
+    player = result.scalars().first()
+
+    if player is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Player not found"
+        )
+
+    if not player.is_playing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Player already left"
+        )
+
+    if not (user.is_superuser or player.user_id == user.id):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="You do not have permission to get this player",
+        )
+
+    player.cash_out = cash_out
+    player.is_playing = False
+
+    await session.commit()
+
+
+@router.put("/{table_id}/players/{player_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_player(
+    table_id: str,
+    player_id: str,
+    cash_out: int = Query(ge=0),
+    session: AsyncSession = Depends(get_async_session),
+):
+    table = await get_table_model(table_id, session)
+
+    if table.finished:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Table already finished"
+        )
+
+    player = await get_player_model(player_id, session, selectinload(Player.user))
+    user = player.user
+
+    if not player.is_playing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Player already left"
+        )
+
+    if not user.is_superuser and table.owner_id != user.id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="You do not have permission to get this player",
+        )
+
+    player.cash_out = cash_out
+    player.is_playing = False
+
+    await session.commit()
+
+
+def get_transactions(players: Iterable[PlayerResponse]) -> list[TransactionResponse]:
+    net_balances = {p.username: p.cash_out - p.buy_in for p in players}
+    positives = {k: v for k, v in net_balances.items() if v > 0}
+    negatives = {k: -v for k, v in net_balances.items() if v < 0}
+
+    transactions = []
+    for getter, money in positives.items():
+        for giver, debt in negatives.items():
+            if debt == 0:
+                continue
+
+            if money >= debt:
+                transactions.append(
+                    TransactionResponse(giver=giver, getter=getter, money=debt)
+                )
+                negatives[giver] = 0
+                money -= debt
+            elif 0 < money < debt:
+                transactions.append(
+                    TransactionResponse(giver=giver, getter=getter, money=money)
+                )
+                negatives[giver] = debt - money
+                money = 0
+
+            if money == 0:
+                break
+
+    return transactions
+
+
+@router.get("/{table_id}/results")
+async def get_table_results(
+    table_id: str,
+    session: AsyncSession = Depends(get_async_session),
+) -> ResultResponse:
+    table = await get_table_model(
+        table_id, session, selectinload(GameTable.players).selectinload(Player.user)
+    )
+
+    table_response = TableResponse.model_validate(table)
+    transactions = get_transactions(
+        PlayerResponse.model_validate(p) for p in table.players
+    )
+
+    return ResultResponse(table=table_response, transactions=transactions)

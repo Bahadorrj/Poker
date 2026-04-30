@@ -55,3 +55,10 @@ class TransactionResponse(PokerBaseModel):
 class ResultResponse(PokerBaseModel):
     table: TableResponse
     transactions: list[TransactionResponse]
+
+
+class ClubResponse(PokerBaseModel):
+    id: uuid.UUID
+    owner_id: uuid.UUID
+    name: str
+    opened_at: datetime.datetime
