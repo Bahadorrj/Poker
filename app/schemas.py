@@ -57,6 +57,10 @@ class ResultResponse(PokerBaseModel):
     transactions: list[TransactionResponse]
 
 
+class OpenClubRequest(PokerBaseModel):
+    name: str = Field(max_length=256, min_length=4)
+
+
 class ClubResponse(PokerBaseModel):
     id: uuid.UUID
     owner_id: uuid.UUID

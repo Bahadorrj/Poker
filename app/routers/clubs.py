@@ -1,7 +1,7 @@
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -9,7 +9,7 @@ from starlette import status
 
 from ..db import get_async_session
 from ..models import Club, ClubMember, GameTable, User
-from ..schemas import ClubResponse, TableResponse, UserRead
+from ..schemas import OpenClubRequest, ClubResponse, TableResponse, UserRead
 from .auth import current_active_user
 from .tables import join_table
 
@@ -18,10 +18,11 @@ router = APIRouter(prefix="/clubs", tags=["clubs"])
 
 @router.post("/", status_code=status.HTTP_201_CREATED)
 async def open_club(
-    name: str = Body(max_length=256, min_length=4),
+    body: OpenClubRequest,
     user: User = Depends(current_active_user),
     session: AsyncSession = Depends(get_async_session),
 ) -> uuid.UUID:
+    name = body.name
     # Check club does not exist
     existing = await session.scalar(
         select(Club).where(
