@@ -53,7 +53,7 @@ class User(SQLAlchemyBaseUserTableUUID, Base):
 
     member_of_clubs: Mapped[list["Club"]] = relationship(
         "Club",
-        secondary="ClubMember",
+        secondary="club_members",
         back_populates="members",
     )
 
@@ -147,7 +147,7 @@ class Club(Base):
     # Members (many-to-many)
     members: Mapped[list[User]] = relationship(
         "User",
-        secondary="ClubMembers",
+        secondary="club_members",
         back_populates="member_of_clubs",
     )
     tables: Mapped[list[GameTable]] = relationship("GameTable", back_populates="club")
