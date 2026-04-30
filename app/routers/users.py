@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from starlette import status
 
 from ..db import get_async_session
-from ..models import User, Player
+from ..models import GameTable, User, Player
 from ..schemas import (
     UserRead,
     UserUpdate,
@@ -51,7 +51,6 @@ async def get_users(
 
 user_router = APIRouter(prefix="/users", tags=["users"])
 user_router.include_router(fastapi_users.get_users_router(UserRead, UserUpdate))
-router.include_router(user_router)
 
 
 async def get_history_response(session: AsyncSession, user: User):
@@ -112,3 +111,33 @@ async def get_user_history(
         )
 
     return await get_history_response(session, user)
+
+
+@user_router.get("/leaderboard")
+async def get_leaderboard(
+    session: AsyncSession = Depends(get_async_session),
+) -> dict[str, int]:
+    tables = await session.execute(
+        select(GameTable)
+        .where(GameTable.finished)
+        .options(selectinload(GameTable.players))
+    )
+    leaderboard: dict[str, int] = {}
+
+    for table in tables:
+        if not table.finished:
+            continue
+
+        for player in table.players:
+            username = player.username
+
+            if username not in leaderboard:
+                leaderboard[username] = 0
+
+            net_balance = player.cash_out - player.buy_in
+            leaderboard[username] += net_balance
+
+    return dict(sorted(leaderboard.items(), key=lambda item: item[1]))
+
+
+router.include_router(user_router)
