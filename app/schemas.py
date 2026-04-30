@@ -38,7 +38,7 @@ class UserHistoryResponse(PokerBaseModel):
 
 class TableResponse(PokerBaseModel):
     id: uuid.UUID
-    user_id: uuid.UUID
+    owner_id: uuid.UUID
     bank: int = Field(ge=0)
     finished: bool
     started_at: datetime.datetime
