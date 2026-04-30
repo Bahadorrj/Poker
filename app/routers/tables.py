@@ -24,13 +24,11 @@ router = APIRouter(prefix="/tables", tags=["tables"])
 
 
 async def get_table_model(
-    table_id: str,
+    table_id: uuid.UUID,
     session: AsyncSession,
     *options: Any,
 ) -> GameTable:
-    table_uuid = uuid.UUID(table_id)
-
-    stmt = select(GameTable).where(GameTable.id == table_uuid)
+    stmt = select(GameTable).where(GameTable.id == table_id)
 
     if options:
         stmt = stmt.options(*options)
@@ -46,33 +44,45 @@ async def get_table_model(
     return table
 
 
-@router.get("/{table_id}")
-async def get_table(
-    table_id: str,
-    session: AsyncSession = Depends(get_async_session),
-) -> TableResponse:
-    return TableResponse.model_validate(await get_table_model(table_id, session))
-
-
-@router.put("/{table_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def close_table(
-    table_id: str,
-    user: User = Depends(current_active_user),
-    session: AsyncSession = Depends(get_async_session),
-) -> None:
-    table = await get_table_model(
-        table_id, session, selectinload(GameTable.players).selectinload(Player.user)
-    )
-
+def validate_permission(user: User, table: GameTable):
     if (
         not user.is_superuser  # Admin
         and table.owner_id != user.id  # Table owner
         and table.club.owner_id != user.id  # Club owner
     ):
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
+            status_code=status.HTTP_403_FORBIDDEN,
             detail="You do not have permission to close this table",
         )
+
+
+@router.get("/{table_id}")
+async def get_table(
+    table_id: uuid.UUID,
+    user: User = Depends(current_active_user),
+    session: AsyncSession = Depends(get_async_session),
+) -> TableResponse:
+    table = await get_table_model(table_id, session)
+
+    validate_permission(user, table)
+
+    return TableResponse.model_validate(table)
+
+
+@router.put("/{table_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def close_table(
+    table_id: uuid.UUID,
+    user: User = Depends(current_active_user),
+    session: AsyncSession = Depends(get_async_session),
+) -> None:
+    table = await get_table_model(
+        table_id,
+        session,
+        selectinload(GameTable.players).selectinload(Player.user),
+        selectinload(GameTable.club),
+    )
+
+    validate_permission(user, table)
 
     if table.finished:
         raise HTTPException(
@@ -96,7 +106,7 @@ async def close_table(
 
 @router.delete("/{table_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_table(
-    table_id: str,
+    table_id: uuid.UUID,
     user: User = Depends(current_active_user),
     session: AsyncSession = Depends(get_async_session),
 ):
@@ -108,7 +118,7 @@ async def delete_table(
         and table.club.owner_id != user.id  # Club owner
     ):
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
+            status_code=status.HTTP_403_FORBIDDEN,
             detail="You do not have permission to delete this table",
         )
 
@@ -118,7 +128,7 @@ async def delete_table(
 
 @router.post("/{table_id}/players", status_code=status.HTTP_201_CREATED)
 async def join_table(
-    table_id: str,
+    table_id: uuid.UUID,
     user: User = Depends(current_active_user),
     session: AsyncSession = Depends(get_async_session),
 ) -> uuid.UUID:
@@ -132,8 +142,8 @@ async def join_table(
     # Check player does not exist
     existing = await session.scalar(
         select(Player).where(
-            Player.user_id == user.id,
-        )
+            Player.user_id == user.id, Player.table_id == table.id
+        )  # Ensure the user is a player in a specified table not just a player
     )
     if existing:
         raise HTTPException(
@@ -154,19 +164,22 @@ async def join_table(
 
 @router.get("/{table_id}/players", description="Get all players in the target table")
 async def get_table_players(
-    table_id: str,
+    table_id: uuid.UUID,
+    user: User = Depends(current_active_user),
     session: AsyncSession = Depends(get_async_session),
 ) -> list[PlayerResponse]:
     table = await get_table_model(
         table_id, session, selectinload(GameTable.players).selectinload(Player.user)
     )
 
+    validate_permission(user, table)
+
     return [PlayerResponse.model_validate(p) for p in table.players]
 
 
 @router.put("/{table_id}/players", status_code=status.HTTP_204_NO_CONTENT)
 async def leave_table(
-    table_id: str,
+    table_id: uuid.UUID,
     cash_out: int = Query(ge=0),
     user: User = Depends(current_active_user),
     session: AsyncSession = Depends(get_async_session),
@@ -178,7 +191,9 @@ async def leave_table(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Table already finished"
         )
 
-    result = await session.execute(select(Player).where(Player.user_id == user.id))
+    result = await session.execute(
+        select(Player).where(Player.user_id == user.id, Player.table_id == table_id)
+    )
     player = result.scalars().first()
 
     if player is None:
@@ -193,7 +208,7 @@ async def leave_table(
 
     if not (user.is_superuser or player.user_id == user.id):
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
+            status_code=status.HTTP_403_FORBIDDEN,
             detail="You do not have permission to get this player",
         )
 
@@ -205,9 +220,10 @@ async def leave_table(
 
 @router.put("/{table_id}/players/{player_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def remove_player(
-    table_id: str,
-    player_id: str,
+    table_id: uuid.UUID,
+    player_id: uuid.UUID,
     cash_out: int = Query(ge=0),
+    user: User = Depends(current_active_user),
     session: AsyncSession = Depends(get_async_session),
 ):
     table = await get_table_model(table_id, session)
@@ -218,7 +234,6 @@ async def remove_player(
         )
 
     player = await get_player_model(player_id, session, selectinload(Player.user))
-    user = player.user
 
     if not player.is_playing:
         raise HTTPException(
@@ -227,7 +242,7 @@ async def remove_player(
 
     if not user.is_superuser and table.owner_id != user.id:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
+            status_code=status.HTTP_403_FORBIDDEN,
             detail="You do not have permission to get this player",
         )
 
@@ -269,12 +284,15 @@ def get_transactions(players: Iterable[PlayerResponse]) -> list[TransactionRespo
 
 @router.get("/{table_id}/results")
 async def get_table_results(
-    table_id: str,
+    table_id: uuid.UUID,
+    user: User = Depends(current_active_user),
     session: AsyncSession = Depends(get_async_session),
 ) -> ResultResponse:
     table = await get_table_model(
         table_id, session, selectinload(GameTable.players).selectinload(Player.user)
     )
+
+    validate_permission(user, table)
 
     table_response = TableResponse.model_validate(table)
     transactions = get_transactions(

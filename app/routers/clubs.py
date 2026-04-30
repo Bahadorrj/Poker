@@ -41,7 +41,7 @@ async def open_club(
     await session.refresh(club)
 
     # Join immediately
-    await join_club(str(club.id))
+    await join_club(club.id, user, session)
 
     return club.id
 
@@ -57,13 +57,11 @@ async def get_clubs(
 
 
 async def get_club_model(
-    club_id: str,
+    club_id: uuid.UUID,
     session: AsyncSession,
     *options: Any,
 ) -> Club:
-    club_uuid = uuid.UUID(club_id)
-
-    stmt = select(Club).where(Club.id == club_uuid)
+    stmt = select(Club).where(Club.id == club_id)
 
     if options:
         stmt = stmt.options(*options)
@@ -81,16 +79,13 @@ async def get_club_model(
 
 
 async def get_member_model(
-    club_id: str,
-    user_id: str,
+    club_id: uuid.UUID,
+    user_id: uuid.UUID,
     session: AsyncSession,
 ) -> ClubMember:
-    club_uuid = uuid.UUID(club_id)
-    user_uuid = uuid.UUID(user_id)
-
     result = await session.execute(
         select(ClubMember).where(
-            ClubMember.user_id == user_uuid, ClubMember.club_id == club_uuid
+            ClubMember.user_id == user_id, ClubMember.club_id == club_id
         )
     )
     member = result.scalars().first()
@@ -105,7 +100,7 @@ async def get_member_model(
 
 @router.get("/{club_id}")
 async def get_club(
-    club_id: str,
+    club_id: uuid.UUID,
     session: AsyncSession = Depends(get_async_session),
 ) -> ClubResponse:
     return ClubResponse.model_validate(await get_club_model(club_id, session))
@@ -113,7 +108,7 @@ async def get_club(
 
 @router.delete("/{club_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_club(
-    club_id: str,
+    club_id: uuid.UUID,
     user: User = Depends(current_active_user),
     session: AsyncSession = Depends(get_async_session),
 ):
@@ -121,7 +116,7 @@ async def delete_club(
 
     if not user.is_superuser and club.owner_id != user.id:  # Admin  # Club owner
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
+            status_code=status.HTTP_403_FORBIDDEN,
             detail="You do not have permission to delete this club",
         )
 
@@ -131,12 +126,10 @@ async def delete_club(
 
 @router.post("/{club_id}/members")
 async def join_club(
-    club_id: str,
+    club_id: uuid.UUID,
     user: User = Depends(current_active_user),
     session: AsyncSession = Depends(get_async_session),
 ):
-    club_uuid = uuid.UUID(club_id)
-
     # Check club exists (raise not found error if not)
     await get_club_model(club_id, session)
 
@@ -144,7 +137,7 @@ async def join_club(
     existing = await session.scalar(
         select(ClubMember).where(
             ClubMember.user_id == user.id,
-            ClubMember.club_id == club_uuid,
+            ClubMember.club_id == club_id,
         )
     )
     if existing:
@@ -155,15 +148,24 @@ async def join_club(
 
     # TODO: send a request to club owner to approve the new member before adding them
 
-    club_member = ClubMember(club_id=club_uuid, user_id=user.id)
+    club_member = ClubMember(club_id=club_id, user_id=user.id)
     session.add(club_member)
 
     await session.commit()
 
 
+def validate_permission(user: User, club: Club):
+    if user not in club.members:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to view the club's details",
+        )
+
+
 @router.get("/{club_id}/members", description="Get all members of the club")
 async def get_club_members(
-    club_id: str,
+    club_id: uuid.UUID,
+    user: User = Depends(current_active_user),
     session: AsyncSession = Depends(get_async_session),
 ) -> list[UserRead]:
     club = await get_club_model(
@@ -172,24 +174,26 @@ async def get_club_members(
         selectinload(Club.members),
     )
 
+    validate_permission(user, club)
+
     return [UserRead.model_validate(m) for m in club.members]
 
 
 @router.delete("/{club_id}/members")
 async def leave_club(
-    club_id: str,
+    club_id: uuid.UUID,
     user: User = Depends(current_active_user),
     session: AsyncSession = Depends(get_async_session),
 ):
     # Get member
-    member = await get_member_model(club_id, str(user.id), session)
+    member = await get_member_model(club_id, user.id, session)
 
     if (
         not user.is_superuser  # Admin
         and user.id != member.user_id  # The member himself
     ):
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
+            status_code=status.HTTP_403_FORBIDDEN,
             detail="You do not have permission to complete this action",
         )
 
@@ -199,8 +203,8 @@ async def leave_club(
 
 @router.delete("/{club_id}/members/{user_id}")
 async def remove_member(
-    club_id: str,
-    user_id: str,
+    club_id: uuid.UUID,
+    user_id: uuid.UUID,
     user: User = Depends(current_active_user),
     session: AsyncSession = Depends(get_async_session),
 ):
@@ -213,7 +217,7 @@ async def remove_member(
         and user.id != club.owner_id  # The owner of the club
     ):
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
+            status_code=status.HTTP_403_FORBIDDEN,
             detail="You do not have permission to complete this action",
         )
 
@@ -223,34 +227,38 @@ async def remove_member(
 
 @router.post("/{club_id}/tables", status_code=status.HTTP_201_CREATED)
 async def open_table(
-    club_id: str,
+    club_id: uuid.UUID,
     join_as_player: bool,
     user: User = Depends(current_active_user),
     session: AsyncSession = Depends(get_async_session),
 ) -> uuid.UUID:
-    table = GameTable(owner_id=user.id, club_id=uuid.UUID(club_id))
+    table = GameTable(owner_id=user.id, club_id=club_id)
     session.add(table)
 
     await session.commit()
     await session.refresh(table)
 
     if join_as_player:
-        await join_table(str(table.id), user, session)
+        await join_table(table.id, user, session)
 
     return table.id
 
 
 @router.get("/{club_id}/tables", description="Get all tables of the club")
 async def get_club_tables(
-    club_id: str,
+    club_id: uuid.UUID,
     open_tables_only: bool | None = None,
+    user: User = Depends(current_active_user),
     session: AsyncSession = Depends(get_async_session),
 ) -> list[TableResponse]:
     club = await get_club_model(
         club_id,
         session,
         selectinload(Club.members),
+        selectinload(Club.tables),
     )
+
+    validate_permission(user, club)
 
     valid_tables = (
         [t for t in club.tables if not t.finished] if open_tables_only else club.tables
@@ -261,12 +269,18 @@ async def get_club_tables(
 
 @router.get("/{club_id}/leaderboard")
 async def get_leaderboard(
-    club_id: str,
+    club_id: uuid.UUID,
+    user: User = Depends(current_active_user),
     session: AsyncSession = Depends(get_async_session),
 ) -> dict[str, int]:
     club = await get_club_model(
-        club_id, session, selectinload(Club.tables).selectinload(GameTable.players)
+        club_id,
+        session,
+        selectinload(Club.members),
+        selectinload(Club.tables).selectinload(GameTable.players),
     )
+
+    validate_permission(user, club)
 
     leaderboard: dict[str, int] = {}
 

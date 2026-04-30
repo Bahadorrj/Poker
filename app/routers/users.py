@@ -29,7 +29,7 @@ async def get_users(
 ) -> list[UserRead]:
     if not user.is_superuser:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
+            status_code=status.HTTP_403_FORBIDDEN,
             detail="You can not get all users",
         )
 
@@ -87,7 +87,7 @@ async def get_history_response(session: AsyncSession, user: User):
     )
 
 
-@user_router.get("/history")
+@user_router.get("/me/history")
 async def get_history(
     session: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_active_user),
@@ -95,33 +95,24 @@ async def get_history(
     return await get_history_response(session, user)
 
 
-@user_router.get("/{user_id}/history")
-async def get_user_history(
-    user_id: str,
-    session: AsyncSession = Depends(get_async_session),
-) -> UserHistoryResponse:
-    user_uuid = uuid.UUID(user_id)
-
-    result = await session.execute(select(User).filter_by(id=user_uuid))
-    user = result.scalars().first()
-
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
-        )
-
-    return await get_history_response(session, user)
-
-
 @user_router.get("/leaderboard")
 async def get_leaderboard(
     session: AsyncSession = Depends(get_async_session),
+    user: User = Depends(current_active_user),
 ) -> dict[str, int]:
-    tables = await session.execute(
+    if not user.is_superuser:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to get the leaderboard",
+        )
+
+    result = await session.execute(
         select(GameTable)
         .where(GameTable.finished)
         .options(selectinload(GameTable.players))
     )
+    tables = result.scalars().all()
+
     leaderboard: dict[str, int] = {}
 
     for table in tables:

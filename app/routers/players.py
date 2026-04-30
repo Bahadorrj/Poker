@@ -8,7 +8,7 @@ from sqlalchemy.orm import selectinload
 from starlette import status
 
 from ..db import get_async_session
-from ..models import Player, User
+from ..models import GameTable, Player, User
 from ..schemas import PlayerResponse
 from .auth import current_active_user
 
@@ -16,13 +16,11 @@ router = APIRouter(prefix="/players", tags=["players"])
 
 
 async def get_player_model(
-    player_id: str,
+    player_id: uuid.UUID,
     session: AsyncSession,
     *options: Any,
 ) -> Player:
-    player_uuid = uuid.UUID(player_id)
-
-    stmt = select(Player).where(Player.id == player_uuid)
+    stmt = select(Player).where(Player.id == player_id)
 
     if options:
         stmt = stmt.options(*options)
@@ -38,32 +36,47 @@ async def get_player_model(
     return player
 
 
+def validate_permission(user: User, player: Player):
+    if not (
+        user.is_superuser  # Admin
+        or player.user_id == user.id  # Player himself
+        or player.table.owner_id == user.id  # Table owner
+        or player.table.club.owner_id == user.id  #  Club owner
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to get this player",
+        )
+
+
 @router.get("/{player_id}")
 async def get_player(
-    player_id: str, session: AsyncSession = Depends(get_async_session)
+    player_id: uuid.UUID,
+    user: User = Depends(current_active_user),
+    session: AsyncSession = Depends(get_async_session),
 ) -> PlayerResponse:
+    player = await get_player_model(
+        player_id, session, selectinload(Player.table).selectinload(GameTable.club)
+    )
+
+    validate_permission(user, player)
+
     return PlayerResponse.model_validate(await get_player_model(player_id, session))
 
 
 @router.put("/{player_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def charge_player(
-    player_id: str,
+    player_id: uuid.UUID,
     amount: int = Query(gt=0),
     user: User = Depends(current_active_user),
     session: AsyncSession = Depends(get_async_session),
 ) -> None:
-    player = await get_player_model(player_id, session, selectinload(Player.table))
+    player = await get_player_model(
+        player_id, session, selectinload(Player.table).selectinload(GameTable.club)
+    )
     table = player.table
 
-    if not (
-        user.is_superuser  # admin
-        or player.user_id == user.id  # the player himself
-        or user.id == player.table.owner_id  # table owner
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="You do not have permission to get this player",
-        )
+    validate_permission(user, player)
 
     if table.finished:
         raise HTTPException(
@@ -77,21 +90,15 @@ async def charge_player(
 
 @router.delete("/{player_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_player(
-    player_id: str,
+    player_id: uuid.UUID,
     user: User = Depends(current_active_user),
     session: AsyncSession = Depends(get_async_session),
 ):
-    player = await get_player_model(player_id, session)
+    player = await get_player_model(
+        player_id, session, selectinload(Player.table).selectinload(GameTable.club)
+    )
 
-    if not (
-        user.is_superuser
-        or player.user_id == user.id
-        or user.id == player.table.owner_id
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="You do not have permission to get this player",
-        )
+    validate_permission(user, player)
 
     await session.delete(player)
     await session.commit()

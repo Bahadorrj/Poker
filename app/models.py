@@ -25,6 +25,10 @@ class Base(DeclarativeBase):
     pass
 
 
+def now():
+    return datetime.datetime.now(tz=datetime.timezone.utc)
+
+
 class User(SQLAlchemyBaseUserTableUUID, Base):
     __tablename__ = "users"
 
@@ -34,7 +38,7 @@ class User(SQLAlchemyBaseUserTableUUID, Base):
     username: Mapped[str] = mapped_column(String, unique=True)
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime,
-        default=datetime.datetime.now,
+        default=now,
     )
 
     tables: Mapped[list["GameTable"]] = relationship(
@@ -49,7 +53,7 @@ class User(SQLAlchemyBaseUserTableUUID, Base):
 
     member_of_clubs: Mapped[list["Club"]] = relationship(
         "Club",
-        secondary="ClubMembers",
+        secondary="ClubMember",
         back_populates="members",
     )
 
@@ -100,9 +104,7 @@ class GameTable(Base):
         ForeignKey("clubs.id"),
     )
     finished: Mapped[bool] = mapped_column(Boolean, default=False)
-    started_at: Mapped[datetime.datetime] = mapped_column(
-        DateTime, default=datetime.datetime.now
-    )
+    started_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=now)
     finished_at: Mapped[datetime.datetime | None] = mapped_column(
         DateTime, default=None
     )
@@ -135,9 +137,7 @@ class Club(Base):
         Uuid(as_uuid=True),
         ForeignKey("users.id"),
     )
-    opened_at: Mapped[datetime.datetime] = mapped_column(
-        DateTime, default=datetime.datetime.now
-    )
+    opened_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=now)
 
     owner: Mapped["User"] = relationship(
         "User",
