@@ -4,10 +4,12 @@ import uuid
 from fastapi_users.db import SQLAlchemyBaseUserTableUUID
 from sqlalchemy import (
     Boolean,
+    Column,
     DateTime,
     ForeignKey,
     Integer,
     String,
+    Table,
     Uuid,
     func,
     select,
@@ -27,6 +29,14 @@ class Base(DeclarativeBase):
 
 def now():
     return datetime.datetime.now(tz=datetime.timezone.utc)
+
+
+club_members = Table(
+    "club_members",
+    Base.metadata,
+    Column("club_id", Uuid(as_uuid=True), ForeignKey("clubs.id"), primary_key=True),
+    Column("user_id", Uuid(as_uuid=True), ForeignKey("users.id"), primary_key=True),
+)
 
 
 class User(SQLAlchemyBaseUserTableUUID, Base):
@@ -53,7 +63,7 @@ class User(SQLAlchemyBaseUserTableUUID, Base):
 
     member_of_clubs: Mapped[list["Club"]] = relationship(
         "Club",
-        secondary="club_members",
+        secondary=club_members,
         back_populates="members",
     )
 
@@ -139,26 +149,15 @@ class Club(Base):
     )
     opened_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=now)
 
-    owner: Mapped["User"] = relationship(
-        "User",
+    owner: Mapped[User] = relationship(
+        User,
         back_populates="clubs",
         foreign_keys=[owner_id],
     )
     # Members (many-to-many)
     members: Mapped[list[User]] = relationship(
         "User",
-        secondary="club_members",
+        secondary=club_members,
         back_populates="member_of_clubs",
     )
     tables: Mapped[list[GameTable]] = relationship("GameTable", back_populates="club")
-
-
-class ClubMember(Base):
-    __tablename__ = "club_members"
-
-    club_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("clubs.id"), primary_key=True
-    )
-    user_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("users.id"), primary_key=True
-    )

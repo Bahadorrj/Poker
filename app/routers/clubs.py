@@ -2,14 +2,14 @@ import uuid
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import Row, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from starlette import status
 
 from ..db import get_async_session
-from ..models import Club, ClubMember, GameTable, User
-from ..schemas import OpenClubRequest, ClubResponse, TableResponse, UserRead
+from ..models import Club, GameTable, User, club_members
+from ..schemas import ClubResponse, OpenClubRequest, TableResponse, UserRead
 from .auth import current_active_user
 from .tables import join_table
 
@@ -83,13 +83,13 @@ async def get_member_model(
     club_id: uuid.UUID,
     user_id: uuid.UUID,
     session: AsyncSession,
-) -> ClubMember:
+) -> Row:
     result = await session.execute(
-        select(ClubMember).where(
-            ClubMember.user_id == user_id, ClubMember.club_id == club_id
+        select(club_members).where(
+            club_members.c.user_id == user_id, club_members.c.club_id == club_id
         )
     )
-    member = result.scalars().first()
+    member = result.first()
 
     if member is None:
         raise HTTPException(
@@ -135,13 +135,13 @@ async def join_club(
     await get_club_model(club_id, session)
 
     # Check member does not exist
-    existing = await session.scalar(
-        select(ClubMember).where(
-            ClubMember.user_id == user.id,
-            ClubMember.club_id == club_id,
+    result = await session.execute(
+        select(club_members).where(
+            club_members.c.user_id == user.id, club_members.c.club_id == club_id
         )
     )
-    if existing:
+    member = result.first()
+    if member:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Member already exists",
@@ -149,9 +149,9 @@ async def join_club(
 
     # TODO: send a request to club owner to approve the new member before adding them
 
-    club_member = ClubMember(club_id=club_id, user_id=user.id)
-    session.add(club_member)
-
+    await session.execute(
+        club_members.insert().values(club_id=club_id, user_id=user.id)
+    )
     await session.commit()
 
 
@@ -198,7 +198,12 @@ async def leave_club(
             detail="You do not have permission to complete this action",
         )
 
-    await session.delete(member)
+    await session.execute(
+        club_members.delete().where(
+            club_members.c.club_id == club_id,
+            club_members.c.user_id == member.id,
+        )
+    )
     await session.commit()
 
 
@@ -209,8 +214,6 @@ async def remove_member(
     user: User = Depends(current_active_user),
     session: AsyncSession = Depends(get_async_session),
 ):
-    # Get member
-    member = await get_member_model(club_id, user_id, session)
     club = await get_club_model(club_id, session)
 
     if (
@@ -222,7 +225,12 @@ async def remove_member(
             detail="You do not have permission to complete this action",
         )
 
-    await session.delete(member)
+    await session.execute(
+        club_members.delete().where(
+            club_members.c.club_id == club_id,
+            club_members.c.user_id == user_id,
+        )
+    )
     await session.commit()
 
 
