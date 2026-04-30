@@ -38,7 +38,7 @@ class User(SQLAlchemyBaseUserTableUUID, Base):
     )
 
     tables: Mapped[list["GameTable"]] = relationship(
-        "GameTable", back_populates="user", cascade="all, delete-orphan"
+        "GameTable", back_populates="owner", cascade="all, delete-orphan"
     )
     players: Mapped[list["Player"]] = relationship(
         "Player", back_populates="user", cascade="all, delete-orphan"
@@ -82,7 +82,7 @@ class GameTable(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
-    user_id: Mapped[uuid.UUID] = mapped_column(
+    owner_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey("users.id"),
     )
@@ -101,7 +101,7 @@ class GameTable(Base):
         .scalar_subquery()
     )
 
-    user: Mapped[User] = relationship(
-        User, back_populates="tables", foreign_keys=[user_id]
+    owner: Mapped[User] = relationship(
+        User, back_populates="tables", foreign_keys=[owner_id]
     )
     players: Mapped[list[Player]] = relationship(Player, back_populates="table")

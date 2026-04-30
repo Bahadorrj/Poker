@@ -80,7 +80,7 @@ async def charge_player(
     if not (
         user.is_superuser  # admin
         or player.user_id == user.id  # the player himself
-        or user.id == player.table.user_id  # table owner
+        or user.id == player.table.owner_id  # table owner
     ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -114,7 +114,7 @@ async def leave_table(
     if not (
         user.is_superuser
         or player.user_id == user.id
-        or user.id == player.table.user_id
+        or user.id == player.table.owner_id
     ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -145,7 +145,7 @@ async def delete_player(
     if not (
         user.is_superuser
         or player.user_id == user.id
-        or user.id == player.table.user_id
+        or user.id == player.table.owner_id
     ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

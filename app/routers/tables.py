@@ -148,7 +148,7 @@ async def close_table(
 ) -> None:
     table = await get_table_model(table_id, session)
 
-    if not user.is_superuser and table.user_id != user.id:
+    if not user.is_superuser and table.owner_id != user.id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="You do not have permission to close this table",
@@ -168,7 +168,7 @@ async def close_table(
         if p.is_playing:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Player with username {p.user.username} must first leave the table",
+                detail=f"Player with username {p.username} must first leave the table",
             )
 
     await session.commit()
@@ -182,7 +182,7 @@ async def delete_table(
 ):
     table = await get_table_model(table_id, session)
 
-    if not user.is_superuser and table.user_id != user.id:
+    if not user.is_superuser and table.owner_id != user.id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="You do not have permission to delete this table",
