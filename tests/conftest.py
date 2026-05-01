@@ -2,7 +2,6 @@ import datetime
 import os
 import uuid
 
-import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -47,15 +46,12 @@ async def db_session(engine):
         await session.rollback()  # Undo changes after each test
 
 
-def make_user(is_superuser: bool = False) -> User:
+def make_user() -> User:
     user = User()
     user.id = uuid.uuid4()
-    user.username = "testuser"
     user.created_at = datetime.datetime.now()
-    user.email = "test@example.com"
     user.hashed_password = "testhash"
     user.is_active = True
-    user.is_superuser = is_superuser
     user.is_verified = True
     return user
 
@@ -63,6 +59,9 @@ def make_user(is_superuser: bool = False) -> User:
 @pytest_asyncio.fixture
 async def test_user(db_session) -> User:
     user = make_user()
+    user.username = "testuser"
+    user.email = "test@example.com"
+    user.is_superuser = False
     db_session.add(user)
     await db_session.commit()
     await db_session.refresh(user)
@@ -70,8 +69,24 @@ async def test_user(db_session) -> User:
 
 
 @pytest_asyncio.fixture
+async def other_user(db_session) -> User:
+    # Create another user
+    other_user = make_user()
+    other_user.username = "otheruser"
+    other_user.email = "other@example.com"
+    other_user.is_superuser = False
+    db_session.add(other_user)
+    await db_session.commit()
+    await db_session.refresh(other_user)
+    return other_user
+
+
+@pytest_asyncio.fixture
 async def superuser(db_session) -> User:
-    user = make_user(is_superuser=True)
+    user = make_user()
+    user.username = "superuser"
+    user.email = "super@example.com"
+    user.is_superuser = True
     db_session.add(user)
     await db_session.commit()
     await db_session.refresh(user)
