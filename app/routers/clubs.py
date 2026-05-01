@@ -115,7 +115,7 @@ async def delete_club(
 ):
     club = await get_club_model(club_id, session)
 
-    if not user.is_superuser and club.owner_id != user.id:  # Admin  # Club owner
+    if not (user.is_superuser or club.owner_id == user.id):  # Admin  # Club owner
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You do not have permission to delete this club",
@@ -156,7 +156,7 @@ async def join_club(
 
 
 def validate_permission(user: User, club: Club):
-    if user not in club.members:
+    if not (user.is_superuser or user in club.members):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You do not have permission to view the club's details",
