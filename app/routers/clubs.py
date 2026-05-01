@@ -198,6 +198,13 @@ async def leave_club(
             detail="You do not have permission to complete this action",
         )
 
+    club = await get_club_model(club_id,session)
+    if member.user_id == club.owner_id:
+        raise HTTPException(
+            status_code=status.HTTP_406_NOT_ACCEPTABLE,
+            detail="Club owner can not leave the club",
+        )
+
     await session.execute(
         club_members.delete().where(
             club_members.c.club_id == club_id,
