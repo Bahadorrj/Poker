@@ -8,8 +8,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from starlette import status
 
-from app.routers.players import get_player_model
-
 from ..db import get_async_session
 from ..models import Club, GameTable, Player, User
 from ..schemas import (
@@ -236,6 +234,8 @@ async def remove_player(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Table already finished"
         )
+
+    from .players import get_player_model
 
     player = await get_player_model(player_id, session, selectinload(Player.user))
 
