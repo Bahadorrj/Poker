@@ -1,0 +1,2134 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <title>Poker</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Playfair+Display:wght@400;700;900&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --black: #0a0a0a;
+        --surface: #111111;
+        --surface2: #1a1a1a;
+        --surface3: #242424;
+        --border: #2a2a2a;
+        --gold: #c9a84c;
+        --gold-dim: #7a6128;
+        --gold-bright: #f0c76a;
+        --green: #1a4a2a;
+        --green-bright: #2d7a45;
+        --red: #c0392b;
+        --red-dim: #7a2520;
+        --text: #e8e0d0;
+        --text-dim: #7a7060;
+        --text-muted: #3a3830;
+        --radius: 10px;
+        --radius-sm: 6px;
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      html,
+      body {
+        height: 100%;
+        background: var(--black);
+        color: var(--text);
+        font-family: "DM Mono", monospace;
+        font-size: 14px;
+        overscroll-behavior: none;
+      }
+
+      /* ─── NOISE OVERLAY ─── */
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+        pointer-events: none;
+        z-index: 9999;
+        opacity: 0.4;
+      }
+
+      /* ─── LAYOUT ─── */
+      #app {
+        display: flex;
+        flex-direction: column;
+        height: 100dvh;
+        overflow: hidden;
+      }
+
+      /* ─── HEADER ─── */
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 14px 18px 12px;
+        border-bottom: 1px solid var(--border);
+        background: var(--surface);
+        flex-shrink: 0;
+        position: relative;
+      }
+      header::after {
+        content: "";
+        position: absolute;
+        bottom: -1px;
+        left: 0;
+        right: 0;
+        height: 1px;
+        background: linear-gradient(
+          90deg,
+          transparent,
+          var(--gold-dim),
+          transparent
+        );
+      }
+
+      .logo {
+        font-family: "Playfair Display", serif;
+        font-size: 22px;
+        font-weight: 900;
+        color: var(--gold);
+        letter-spacing: -0.5px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .logo-suit {
+        font-size: 16px;
+        opacity: 0.7;
+      }
+
+      .header-right {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .user-badge {
+        font-size: 11px;
+        color: var(--text-dim);
+        background: var(--surface2);
+        border: 1px solid var(--border);
+        padding: 4px 10px;
+        border-radius: 20px;
+        max-width: 120px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .logout-btn {
+        background: none;
+        border: 1px solid var(--border);
+        color: var(--text-dim);
+        font-family: "DM Mono", monospace;
+        font-size: 11px;
+        padding: 4px 10px;
+        border-radius: 20px;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+      .logout-btn:hover {
+        border-color: var(--red-dim);
+        color: var(--red);
+      }
+
+      /* ─── MAIN CONTENT ─── */
+      main {
+        flex: 1;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        padding: 0;
+      }
+
+      /* ─── NAV TABS ─── */
+      .tab-bar {
+        display: flex;
+        background: var(--surface);
+        border-top: 1px solid var(--border);
+        flex-shrink: 0;
+        position: relative;
+      }
+      .tab-bar::before {
+        content: "";
+        position: absolute;
+        top: -1px;
+        left: 0;
+        right: 0;
+        height: 1px;
+        background: linear-gradient(
+          90deg,
+          transparent,
+          var(--gold-dim),
+          transparent
+        );
+      }
+      .tab-btn {
+        flex: 1;
+        padding: 12px 6px 10px;
+        background: none;
+        border: none;
+        color: var(--text-dim);
+        font-family: "DM Mono", monospace;
+        font-size: 10px;
+        cursor: pointer;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+        transition: color 0.2s;
+        position: relative;
+      }
+      .tab-btn .tab-icon {
+        font-size: 18px;
+        line-height: 1;
+      }
+      .tab-btn.active {
+        color: var(--gold);
+      }
+      .tab-btn.active::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 20%;
+        right: 20%;
+        height: 2px;
+        background: var(--gold);
+        border-radius: 0 0 2px 2px;
+      }
+
+      /* ─── PAGE SECTIONS ─── */
+      .page {
+        display: none;
+        padding: 18px;
+        animation: fadeUp 0.25s ease;
+      }
+      .page.active {
+        display: block;
+      }
+
+      @keyframes fadeUp {
+        from {
+          opacity: 0;
+          transform: translateY(8px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      /* ─── AUTH PAGE ─── */
+      #auth-page {
+        display: flex;
+        flex-direction: column;
+        min-height: 100dvh;
+        align-items: center;
+        justify-content: center;
+        padding: 32px 24px;
+        background: radial-gradient(
+          ellipse at 50% 0%,
+          #1a2e1a 0%,
+          var(--black) 60%
+        );
+      }
+
+      .auth-logo {
+        font-family: "Playfair Display", serif;
+        font-size: 48px;
+        font-weight: 900;
+        color: var(--gold);
+        text-align: center;
+        margin-bottom: 4px;
+        letter-spacing: -1px;
+      }
+      .auth-tagline {
+        color: var(--text-dim);
+        font-size: 11px;
+        text-align: center;
+        margin-bottom: 40px;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+      }
+
+      .auth-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 24px;
+        width: 100%;
+        max-width: 360px;
+      }
+
+      .auth-tabs {
+        display: flex;
+        gap: 0;
+        margin-bottom: 24px;
+        border-bottom: 1px solid var(--border);
+      }
+      .auth-tab {
+        flex: 1;
+        background: none;
+        border: none;
+        padding: 10px;
+        font-family: "DM Mono", monospace;
+        font-size: 12px;
+        color: var(--text-dim);
+        cursor: pointer;
+        border-bottom: 2px solid transparent;
+        margin-bottom: -1px;
+        transition: all 0.2s;
+      }
+      .auth-tab.active {
+        color: var(--gold);
+        border-bottom-color: var(--gold);
+      }
+
+      .auth-form {
+        display: none;
+      }
+      .auth-form.active {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+
+      /* ─── FORM ELEMENTS ─── */
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .field label {
+        font-size: 11px;
+        color: var(--text-dim);
+        letter-spacing: 1px;
+        text-transform: uppercase;
+      }
+      .field input,
+      .field select {
+        background: var(--surface2);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        padding: 12px 14px;
+        font-family: "DM Mono", monospace;
+        font-size: 14px;
+        color: var(--text);
+        outline: none;
+        transition: border-color 0.2s;
+        width: 100%;
+        -webkit-appearance: none;
+      }
+      .field input:focus,
+      .field select:focus {
+        border-color: var(--gold-dim);
+      }
+      .field input::placeholder {
+        color: var(--text-muted);
+      }
+
+      /* ─── BUTTONS ─── */
+      .btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 13px 18px;
+        border-radius: var(--radius-sm);
+        font-family: "DM Mono", monospace;
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        border: none;
+        transition: all 0.2s;
+        width: 100%;
+        letter-spacing: 0.5px;
+      }
+      .btn-primary {
+        background: var(--gold);
+        color: #111;
+      }
+      .btn-primary:hover {
+        background: var(--gold-bright);
+      }
+      .btn-primary:active {
+        transform: scale(0.98);
+      }
+
+      .btn-secondary {
+        background: var(--surface3);
+        color: var(--text);
+        border: 1px solid var(--border);
+      }
+      .btn-secondary:hover {
+        border-color: var(--gold-dim);
+        color: var(--gold);
+      }
+
+      .btn-danger {
+        background: var(--red-dim);
+        color: var(--text);
+        border: 1px solid #5a1a18;
+      }
+      .btn-danger:hover {
+        background: var(--red);
+      }
+
+      .btn-ghost {
+        background: none;
+        color: var(--text-dim);
+        border: 1px solid var(--border);
+      }
+      .btn-ghost:hover {
+        color: var(--text);
+        border-color: var(--text-dim);
+      }
+
+      .btn-sm {
+        padding: 8px 14px;
+        font-size: 12px;
+        width: auto;
+      }
+      .btn-icon {
+        width: 36px;
+        height: 36px;
+        padding: 0;
+        border-radius: var(--radius-sm);
+        font-size: 16px;
+      }
+
+      .btn:disabled {
+        opacity: 0.4;
+        pointer-events: none;
+      }
+
+      /* ─── SECTION HEADER ─── */
+      .section-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 16px;
+      }
+      .section-title {
+        font-family: "Playfair Display", serif;
+        font-size: 20px;
+        color: var(--text);
+        font-weight: 700;
+      }
+      .section-sub {
+        font-size: 11px;
+        color: var(--text-dim);
+        margin-top: 2px;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+      }
+
+      /* ─── CARDS ─── */
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        overflow: hidden;
+        transition: border-color 0.2s;
+      }
+      .card + .card {
+        margin-top: 10px;
+      }
+      .card:active {
+        border-color: var(--gold-dim);
+      }
+
+      .card-body {
+        padding: 14px 16px;
+      }
+      .card-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+      .card-title {
+        font-size: 15px;
+        color: var(--text);
+        font-weight: 500;
+      }
+      .card-sub {
+        font-size: 11px;
+        color: var(--text-dim);
+        margin-top: 3px;
+      }
+
+      /* ─── BADGE ─── */
+      .badge {
+        font-size: 10px;
+        padding: 3px 8px;
+        border-radius: 20px;
+        font-weight: 500;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+      }
+      .badge-green {
+        background: #0d2e18;
+        color: #4caf72;
+        border: 1px solid #1a4d28;
+      }
+      .badge-red {
+        background: #2e0d0d;
+        color: #c04c4c;
+        border: 1px solid #4d1a1a;
+      }
+      .badge-gold {
+        background: #2e2208;
+        color: var(--gold);
+        border: 1px solid var(--gold-dim);
+      }
+      .badge-dim {
+        background: var(--surface2);
+        color: var(--text-dim);
+        border: 1px solid var(--border);
+      }
+
+      /* ─── STAT ROW ─── */
+      .stats-row {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 20px;
+      }
+      .stat-box {
+        flex: 1;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 14px 12px;
+        text-align: center;
+      }
+      .stat-value {
+        font-family: "Playfair Display", serif;
+        font-size: 22px;
+        color: var(--gold);
+        font-weight: 700;
+      }
+      .stat-label {
+        font-size: 10px;
+        color: var(--text-dim);
+        margin-top: 3px;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+      }
+
+      /* ─── MODAL ─── */
+      .modal-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.85);
+        z-index: 1000;
+        align-items: flex-end;
+        justify-content: center;
+        backdrop-filter: blur(4px);
+      }
+      .modal-overlay.open {
+        display: flex;
+        animation: fadeIn 0.2s;
+      }
+      .modal {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-top: 2px solid var(--gold-dim);
+        border-radius: var(--radius) var(--radius) 0 0;
+        padding: 24px;
+        width: 100%;
+        max-width: 480px;
+        animation: slideUp 0.25s ease;
+        max-height: 90dvh;
+        overflow-y: auto;
+      }
+      .modal-handle {
+        width: 36px;
+        height: 3px;
+        background: var(--border);
+        border-radius: 2px;
+        margin: 0 auto 20px;
+      }
+      .modal-title {
+        font-family: "Playfair Display", serif;
+        font-size: 20px;
+        margin-bottom: 20px;
+        color: var(--gold);
+      }
+      .modal-actions {
+        display: flex;
+        gap: 10px;
+        margin-top: 20px;
+      }
+      .modal-actions .btn {
+        flex: 1;
+      }
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+      @keyframes slideUp {
+        from {
+          transform: translateY(30px);
+        }
+        to {
+          transform: translateY(0);
+        }
+      }
+
+      /* ─── TOAST ─── */
+      #toast {
+        position: fixed;
+        bottom: 80px;
+        left: 50%;
+        transform: translateX(-50%) translateY(20px);
+        background: var(--surface3);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 10px 18px;
+        font-size: 13px;
+        z-index: 2000;
+        opacity: 0;
+        transition: all 0.3s;
+        pointer-events: none;
+        white-space: nowrap;
+        max-width: 90vw;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      #toast.show {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+      }
+      #toast.success {
+        border-color: #1a4d28;
+        color: #4caf72;
+      }
+      #toast.error {
+        border-color: var(--red-dim);
+        color: #c04c4c;
+      }
+
+      /* ─── EMPTY STATE ─── */
+      .empty {
+        text-align: center;
+        padding: 48px 24px;
+        color: var(--text-dim);
+      }
+      .empty-icon {
+        font-size: 36px;
+        margin-bottom: 12px;
+        opacity: 0.4;
+      }
+      .empty-text {
+        font-size: 13px;
+        line-height: 1.6;
+      }
+
+      /* ─── DIVIDER ─── */
+      .divider {
+        border: none;
+        border-top: 1px solid var(--border);
+        margin: 16px 0;
+      }
+
+      /* ─── NUMBER INPUT ─── */
+      .num-input-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .num-input-row input {
+        flex: 1;
+        text-align: center;
+        font-size: 20px;
+        padding: 12px;
+      }
+      .num-btn {
+        width: 44px;
+        height: 44px;
+        border-radius: var(--radius-sm);
+        background: var(--surface3);
+        border: 1px solid var(--border);
+        color: var(--text);
+        font-size: 20px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.15s;
+        flex-shrink: 0;
+      }
+      .num-btn:active {
+        background: var(--gold-dim);
+      }
+
+      /* ─── LEADERBOARD ─── */
+      .lb-row {
+        display: flex;
+        align-items: center;
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--border);
+        gap: 12px;
+      }
+      .lb-row:last-child {
+        border-bottom: none;
+      }
+      .lb-rank {
+        font-family: "Playfair Display", serif;
+        font-size: 18px;
+        color: var(--text-muted);
+        width: 28px;
+        text-align: center;
+        flex-shrink: 0;
+      }
+      .lb-rank.top1 {
+        color: var(--gold);
+      }
+      .lb-rank.top2 {
+        color: #b0b0b0;
+      }
+      .lb-rank.top3 {
+        color: #a07040;
+      }
+      .lb-name {
+        flex: 1;
+        font-size: 14px;
+      }
+      .lb-balance {
+        font-family: "Playfair Display", serif;
+        font-size: 16px;
+      }
+      .lb-balance.positive {
+        color: #4caf72;
+      }
+      .lb-balance.negative {
+        color: #c04c4c;
+      }
+
+      /* ─── HISTORY ─── */
+      .history-row {
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+      .history-row:last-child {
+        border-bottom: none;
+      }
+      .history-date {
+        font-size: 11px;
+        color: var(--text-dim);
+      }
+      .history-amount {
+        font-family: "Playfair Display", serif;
+        font-size: 16px;
+      }
+
+      /* ─── PLAYER LIST ─── */
+      .player-row {
+        display: flex;
+        align-items: center;
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--border);
+        gap: 10px;
+      }
+      .player-row:last-child {
+        border-bottom: none;
+      }
+      .player-avatar {
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        background: var(--surface3);
+        border: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 13px;
+        color: var(--gold);
+        flex-shrink: 0;
+        font-family: "Playfair Display", serif;
+        font-weight: 700;
+      }
+      .player-info {
+        flex: 1;
+        min-width: 0;
+      }
+      .player-name {
+        font-size: 14px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .player-stats {
+        font-size: 11px;
+        color: var(--text-dim);
+        margin-top: 2px;
+      }
+      .player-actions {
+        display: flex;
+        gap: 6px;
+        flex-shrink: 0;
+      }
+
+      /* ─── TRANSACTIONS ─── */
+      .tx-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 16px;
+        border-bottom: 1px solid var(--border);
+        font-size: 13px;
+      }
+      .tx-row:last-child {
+        border-bottom: none;
+      }
+      .tx-arrow {
+        color: var(--gold-dim);
+      }
+      .tx-amount {
+        font-family: "Playfair Display", serif;
+        color: var(--gold);
+        margin-left: auto;
+      }
+
+      /* ─── LOADING ─── */
+      .spinner {
+        display: inline-block;
+        width: 18px;
+        height: 18px;
+        border: 2px solid var(--border);
+        border-top-color: var(--gold);
+        border-radius: 50%;
+        animation: spin 0.6s linear infinite;
+        vertical-align: middle;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      .loading-block {
+        text-align: center;
+        padding: 40px;
+        color: var(--text-dim);
+      }
+
+      /* Chips amount display */
+      .chip-amount {
+        font-family: "Playfair Display", serif;
+        font-size: 15px;
+      }
+      .chip-amount.pos {
+        color: #4caf72;
+      }
+      .chip-amount.neg {
+        color: #c04c4c;
+      }
+      .chip-amount.neu {
+        color: var(--text-dim);
+      }
+
+      /* Back button */
+      .back-btn {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        background: none;
+        border: none;
+        color: var(--gold);
+        font-family: "DM Mono", monospace;
+        font-size: 13px;
+        cursor: pointer;
+        padding: 0;
+        margin-bottom: 18px;
+      }
+
+      /* Club members count */
+      .meta-row {
+        display: flex;
+        gap: 12px;
+        margin-top: 6px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      .meta-item {
+        font-size: 11px;
+        color: var(--text-dim);
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+
+      .gap-sm {
+        gap: 10px;
+      }
+      .flex {
+        display: flex;
+      }
+      .flex-col {
+        flex-direction: column;
+      }
+      .mb-4 {
+        margin-bottom: 16px;
+      }
+      .mt-4 {
+        margin-top: 16px;
+      }
+      .text-center {
+        text-align: center;
+      }
+      .full-width {
+        width: 100%;
+      }
+
+      /* Bet amount presets */
+      .preset-row {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-top: 8px;
+      }
+      .preset-chip {
+        background: var(--surface2);
+        border: 1px solid var(--border);
+        color: var(--text-dim);
+        border-radius: 4px;
+        padding: 6px 12px;
+        font-size: 12px;
+        cursor: pointer;
+        font-family: "DM Mono", monospace;
+        transition: all 0.15s;
+      }
+      .preset-chip:hover,
+      .preset-chip.active {
+        border-color: var(--gold-dim);
+        color: var(--gold);
+        background: #1a1500;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <!-- ═══════════════════════════════ AUTH PAGE ═══════════════════════════════ -->
+      <div id="auth-page">
+        <div class="auth-logo">♠ Poker</div>
+        <div class="auth-tagline">Track · Settle · Compete</div>
+
+        <div class="auth-card">
+          <div class="auth-tabs">
+            <button class="auth-tab active" onclick="switchAuthTab('login')">
+              Login
+            </button>
+            <button class="auth-tab" onclick="switchAuthTab('register')">
+              Register
+            </button>
+          </div>
+
+          <div id="login-form" class="auth-form active">
+            <div class="field">
+              <label>Email</label>
+              <input
+                type="email"
+                id="login-email"
+                placeholder="you@example.com"
+                autocomplete="email"
+              />
+            </div>
+            <div class="field">
+              <label>Password</label>
+              <input
+                type="password"
+                id="login-password"
+                placeholder="••••••••"
+                autocomplete="current-password"
+              />
+            </div>
+            <button class="btn btn-primary mt-4" onclick="doLogin()">
+              Login
+            </button>
+          </div>
+
+          <div id="register-form" class="auth-form">
+            <div class="field">
+              <label>Username</label>
+              <input
+                type="text"
+                id="reg-username"
+                placeholder="Maverick"
+                autocomplete="username"
+              />
+            </div>
+            <div class="field">
+              <label>Email</label>
+              <input
+                type="email"
+                id="reg-email"
+                placeholder="you@example.com"
+                autocomplete="email"
+              />
+            </div>
+            <div class="field">
+              <label>Password</label>
+              <input
+                type="password"
+                id="reg-password"
+                placeholder="••••••••"
+                autocomplete="new-password"
+              />
+            </div>
+            <button class="btn btn-primary mt-4" onclick="doRegister()">
+              Create Account
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════ MAIN APP ═══════════════════════════════ -->
+      <div
+        id="main-app"
+        style="display: none; flex-direction: column; height: 100dvh"
+      >
+        <header>
+          <div class="logo"><span class="logo-suit">♠</span> Poker</div>
+          <div class="header-right">
+            <span class="user-badge" id="header-username">—</span>
+            <button class="logout-btn" onclick="doLogout()">Exit</button>
+          </div>
+        </header>
+
+        <main id="main-content">
+          <!-- ── CLUBS PAGE ── -->
+          <div id="page-clubs" class="page active">
+            <div id="clubs-list-view">
+              <div class="section-header">
+                <div>
+                  <div class="section-title">Clubs</div>
+                  <div class="section-sub">Your poker circles</div>
+                </div>
+                <button
+                  class="btn btn-primary btn-sm"
+                  onclick="openCreateClubModal()"
+                >
+                  + New
+                </button>
+              </div>
+              <div id="clubs-container">
+                <div class="loading-block"><span class="spinner"></span></div>
+              </div>
+            </div>
+
+            <!-- Club Detail view -->
+            <div id="clubs-detail-view" style="display: none">
+              <button class="back-btn" onclick="backToClubs()">← Clubs</button>
+              <div class="section-header">
+                <div>
+                  <div class="section-title" id="club-detail-name">Club</div>
+                  <div class="section-sub" id="club-detail-sub"></div>
+                </div>
+                <button
+                  class="btn btn-primary btn-sm"
+                  onclick="openCreateTableModal()"
+                >
+                  + Table
+                </button>
+              </div>
+
+              <div
+                style="
+                  display: flex;
+                  gap: 8px;
+                  margin-bottom: 16px;
+                  flex-wrap: wrap;
+                "
+              >
+                <button
+                  class="btn btn-ghost btn-sm"
+                  onclick="showClubTab('tables')"
+                  id="ctab-tables"
+                >
+                  Tables
+                </button>
+                <button
+                  class="btn btn-ghost btn-sm"
+                  onclick="showClubTab('members')"
+                  id="ctab-members"
+                >
+                  Members
+                </button>
+                <button
+                  class="btn btn-ghost btn-sm"
+                  onclick="showClubTab('leaderboard')"
+                  id="ctab-leaderboard"
+                >
+                  Board
+                </button>
+              </div>
+
+              <div id="club-tables-section">
+                <div id="club-tables-container">
+                  <div class="loading-block"><span class="spinner"></span></div>
+                </div>
+              </div>
+              <div id="club-members-section" style="display: none">
+                <div class="card">
+                  <div id="club-members-container"></div>
+                </div>
+                <button class="btn btn-secondary mt-4" onclick="joinClub()">
+                  Join this Club
+                </button>
+              </div>
+              <div id="club-leaderboard-section" style="display: none">
+                <div class="card" id="club-lb-container"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── TABLE DETAIL PAGE (overlay on top of clubs) ── -->
+          <div id="page-table" class="page">
+            <button class="back-btn" onclick="backToClub()">← Club</button>
+            <div class="section-header">
+              <div>
+                <div class="section-title" id="table-detail-name">Table</div>
+                <div class="section-sub" id="table-detail-sub"></div>
+              </div>
+              <div>
+                <span id="table-status-badge"></span>
+              </div>
+            </div>
+
+            <div class="stats-row" id="table-stats-row">
+              <div class="stat-box">
+                <div class="stat-value" id="tstat-bank">—</div>
+                <div class="stat-label">Bank</div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-value" id="tstat-players">—</div>
+                <div class="stat-label">Players</div>
+              </div>
+            </div>
+
+            <div
+              id="table-actions"
+              class="mb-4"
+              style="display: flex; gap: 8px; flex-wrap: wrap"
+            >
+              <button
+                class="btn btn-primary btn-sm"
+                onclick="joinCurrentTable()"
+                id="btn-join-table"
+              >
+                Join Table
+              </button>
+              <button
+                class="btn btn-secondary btn-sm"
+                onclick="openLeaveModal()"
+                id="btn-leave-table"
+              >
+                Cash Out
+              </button>
+              <button
+                class="btn btn-ghost btn-sm"
+                onclick="openCloseTableModal()"
+                id="btn-close-table"
+              >
+                Close
+              </button>
+            </div>
+
+            <div class="card">
+              <div id="table-players-container">
+                <div class="loading-block"><span class="spinner"></span></div>
+              </div>
+            </div>
+
+            <div
+              id="table-results-section"
+              style="display: none; margin-top: 16px"
+            >
+              <div class="section-header" style="margin-bottom: 10px">
+                <div class="section-title" style="font-size: 16px">
+                  Settlements
+                </div>
+              </div>
+              <div class="card" id="table-results-container"></div>
+            </div>
+          </div>
+
+          <!-- ── HISTORY PAGE ── -->
+          <div id="page-history" class="page">
+            <div class="section-header">
+              <div>
+                <div class="section-title">History</div>
+                <div class="section-sub">Your sessions</div>
+              </div>
+            </div>
+
+            <div class="stats-row" id="history-stats">
+              <div class="stat-box">
+                <div class="stat-value" id="hstat-balance">—</div>
+                <div class="stat-label">Net</div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-value" id="hstat-sessions">—</div>
+                <div class="stat-label">Sessions</div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-value" id="hstat-time">—</div>
+                <div class="stat-label">Hours</div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div id="history-container">
+                <div class="loading-block"><span class="spinner"></span></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── LEADERBOARD PAGE ── -->
+          <div id="page-leaderboard" class="page">
+            <div class="section-header">
+              <div>
+                <div class="section-title">Leaderboard</div>
+                <div class="section-sub">All-time rankings</div>
+              </div>
+              <button class="btn btn-ghost btn-sm" onclick="loadLeaderboard()">
+                ↺
+              </button>
+            </div>
+            <div class="card" id="leaderboard-container">
+              <div class="loading-block"><span class="spinner"></span></div>
+            </div>
+          </div>
+        </main>
+
+        <nav class="tab-bar">
+          <button
+            class="tab-btn active"
+            onclick="switchTab('clubs')"
+            id="tab-clubs"
+          >
+            <span class="tab-icon">♣</span>
+            <span>Clubs</span>
+          </button>
+          <button
+            class="tab-btn"
+            onclick="switchTab('history')"
+            id="tab-history"
+          >
+            <span class="tab-icon">◈</span>
+            <span>History</span>
+          </button>
+          <button
+            class="tab-btn"
+            onclick="switchTab('leaderboard')"
+            id="tab-leaderboard"
+          >
+            <span class="tab-icon">♔</span>
+            <span>Board</span>
+          </button>
+        </nav>
+      </div>
+      <!-- /main-app -->
+    </div>
+    <!-- /app -->
+
+    <!-- ═══════════════════ MODALS ═══════════════════ -->
+
+    <!-- Create Club -->
+    <div class="modal-overlay" id="modal-create-club">
+      <div class="modal">
+        <div class="modal-handle"></div>
+        <div class="modal-title">New Club</div>
+        <div class="field">
+          <label>Club Name</label>
+          <input
+            type="text"
+            id="new-club-name"
+            placeholder="The Sharks"
+            maxlength="256"
+          />
+        </div>
+        <div class="modal-actions">
+          <button
+            class="btn btn-ghost"
+            onclick="closeModal('modal-create-club')"
+          >
+            Cancel
+          </button>
+          <button class="btn btn-primary" onclick="createClub()">Create</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Create Table -->
+    <div class="modal-overlay" id="modal-create-table">
+      <div class="modal">
+        <div class="modal-handle"></div>
+        <div class="modal-title">New Table</div>
+        <div class="field">
+          <label>Join as player?</label>
+          <select id="new-table-join">
+            <option value="true">Yes — sit down immediately</option>
+            <option value="false">No — just open the table</option>
+          </select>
+        </div>
+        <div class="modal-actions">
+          <button
+            class="btn btn-ghost"
+            onclick="closeModal('modal-create-table')"
+          >
+            Cancel
+          </button>
+          <button class="btn btn-primary" onclick="createTable()">
+            Open Table
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Cash Out / Leave -->
+    <div class="modal-overlay" id="modal-leave">
+      <div class="modal">
+        <div class="modal-handle"></div>
+        <div class="modal-title">Cash Out</div>
+        <div class="field">
+          <label>Your cash-out amount</label>
+          <div class="num-input-row">
+            <button class="num-btn" onclick="adjustLeave(-10)">−</button>
+            <input
+              type="number"
+              id="leave-amount"
+              value="0"
+              min="0"
+              class="field"
+              style="
+                flex: 1;
+                text-align: center;
+                font-size: 22px;
+                padding: 12px;
+              "
+            />
+            <button class="num-btn" onclick="adjustLeave(10)">+</button>
+          </div>
+          <div class="preset-row" id="leave-presets"></div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-ghost" onclick="closeModal('modal-leave')">
+            Cancel
+          </button>
+          <button class="btn btn-primary" onclick="leaveTable()">
+            Confirm
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Charge Player (buy-in) -->
+    <div class="modal-overlay" id="modal-charge">
+      <div class="modal">
+        <div class="modal-handle"></div>
+        <div class="modal-title">Add Buy-in</div>
+        <div class="field">
+          <label>Amount</label>
+          <div class="num-input-row">
+            <button class="num-btn" onclick="adjustCharge(-10)">−</button>
+            <input
+              type="number"
+              id="charge-amount"
+              value="100"
+              min="1"
+              style="
+                flex: 1;
+                text-align: center;
+                font-size: 22px;
+                padding: 12px;
+                background: var(--surface2);
+                border: 1px solid var(--border);
+                border-radius: var(--radius-sm);
+                color: var(--text);
+                font-family: &quot;DM Mono&quot;, monospace;
+              "
+            />
+            <button class="num-btn" onclick="adjustCharge(10)">+</button>
+          </div>
+          <div class="preset-row">
+            <span class="preset-chip" onclick="setCharge(50)">50</span>
+            <span class="preset-chip" onclick="setCharge(100)">100</span>
+            <span class="preset-chip" onclick="setCharge(200)">200</span>
+            <span class="preset-chip" onclick="setCharge(500)">500</span>
+          </div>
+        </div>
+        <input type="hidden" id="charge-player-id" />
+        <div class="modal-actions">
+          <button class="btn btn-ghost" onclick="closeModal('modal-charge')">
+            Cancel
+          </button>
+          <button class="btn btn-primary" onclick="chargePlayer()">
+            Buy In
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Close Table Confirm -->
+    <div class="modal-overlay" id="modal-close-table">
+      <div class="modal">
+        <div class="modal-handle"></div>
+        <div class="modal-title">Close Table?</div>
+        <p style="color: var(--text-dim); font-size: 13px; line-height: 1.6">
+          All players must have cashed out before the table can be closed. This
+          action is irreversible.
+        </p>
+        <div class="modal-actions">
+          <button
+            class="btn btn-ghost"
+            onclick="closeModal('modal-close-table')"
+          >
+            Cancel
+          </button>
+          <button class="btn btn-danger" onclick="closeTable()">
+            Close Table
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div id="toast"></div>
+
+    <script>
+      // ═══════════════════════════════════════════════════════════
+      //  CONFIG
+      // ═══════════════════════════════════════════════════════════
+      const API = "http://localhost:8000"; // '' = same origin. Change to 'http://localhost:8000' for dev.
+
+      // ═══════════════════════════════════════════════════════════
+      //  STATE
+      // ═══════════════════════════════════════════════════════════
+      let token = localStorage.getItem("poker_token") || null;
+      let me = JSON.parse(localStorage.getItem("poker_me") || "null");
+      let currentClub = null;
+      let currentTable = null;
+      let currentTab = "clubs";
+      let currentClubTab = "tables";
+
+      // ═══════════════════════════════════════════════════════════
+      //  API HELPERS
+      // ═══════════════════════════════════════════════════════════
+      async function api(method, path, body, params) {
+        let url = API + path;
+        if (params) {
+          const q = new URLSearchParams(params);
+          url += "?" + q.toString();
+        }
+        const opts = {
+          method,
+          headers: { "Content-Type": "application/json" },
+        };
+        if (token) opts.headers["Authorization"] = "Bearer " + token;
+        if (body !== undefined) opts.body = JSON.stringify(body);
+
+        const res = await fetch(url, opts);
+
+        if (res.status === 204) return null;
+
+        let data;
+        try {
+          data = await res.json();
+        } catch {
+          data = null;
+        }
+
+        if (!res.ok) {
+          const msg = data?.detail || `Error ${res.status}`;
+          throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
+        }
+        return data;
+      }
+
+      // ═══════════════════════════════════════════════════════════
+      //  TOAST
+      // ═══════════════════════════════════════════════════════════
+      let toastTimer;
+      function toast(msg, type = "") {
+        const el = document.getElementById("toast");
+        el.textContent = msg;
+        el.className = "show " + type;
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => {
+          el.className = "";
+        }, 3000);
+      }
+
+      // ═══════════════════════════════════════════════════════════
+      //  AUTH
+      // ═══════════════════════════════════════════════════════════
+      function switchAuthTab(tab) {
+        document.querySelectorAll(".auth-tab").forEach((t, i) => {
+          t.classList.toggle(
+            "active",
+            (i === 0 && tab === "login") || (i === 1 && tab === "register"),
+          );
+        });
+        document
+          .getElementById("login-form")
+          .classList.toggle("active", tab === "login");
+        document
+          .getElementById("register-form")
+          .classList.toggle("active", tab === "register");
+      }
+
+      async function doLogin() {
+        const email = document.getElementById("login-email").value.trim();
+        const pw = document.getElementById("login-password").value;
+        if (!email || !pw) return toast("Fill in all fields", "error");
+        try {
+          const form = new URLSearchParams({ username: email, password: pw });
+          const res = await fetch(API + "/auth/jwt/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: form,
+          });
+          if (!res.ok)
+            throw new Error((await res.json())?.detail || "Login failed");
+          const data = await res.json();
+          token = data.access_token;
+          localStorage.setItem("poker_token", token);
+          await fetchMe();
+          enterApp();
+        } catch (e) {
+          toast(e.message, "error");
+        }
+      }
+
+      async function doRegister() {
+        const username = document.getElementById("reg-username").value.trim();
+        const email = document.getElementById("reg-email").value.trim();
+        const pw = document.getElementById("reg-password").value;
+        if (!username || !email || !pw)
+          return toast("Fill in all fields", "error");
+        try {
+          await api("POST", "/auth/register", {
+            username,
+            email,
+            password: pw,
+          });
+          toast("Account created! Please log in.", "success");
+          switchAuthTab("login");
+          document.getElementById("login-email").value = email;
+        } catch (e) {
+          toast(e.message, "error");
+        }
+      }
+
+      async function fetchMe() {
+        me = await api("GET", "/users/me");
+        localStorage.setItem("poker_me", JSON.stringify(me));
+      }
+
+      function doLogout() {
+        token = null;
+        me = null;
+        localStorage.removeItem("poker_token");
+        localStorage.removeItem("poker_me");
+        document.getElementById("auth-page").style.display = "flex";
+        document.getElementById("main-app").style.display = "none";
+      }
+
+      // ═══════════════════════════════════════════════════════════
+      //  APP INIT
+      // ═══════════════════════════════════════════════════════════
+      function enterApp() {
+        document.getElementById("auth-page").style.display = "none";
+        document.getElementById("main-app").style.display = "flex";
+        document.getElementById("header-username").textContent =
+          me?.username || me?.email || "—";
+        loadClubs();
+      }
+
+      // ═══════════════════════════════════════════════════════════
+      //  TABS
+      // ═══════════════════════════════════════════════════════════
+      function switchTab(tab) {
+        currentTab = tab;
+        document
+          .querySelectorAll(".tab-btn")
+          .forEach((b) => b.classList.remove("active"));
+        document.getElementById("tab-" + tab)?.classList.add("active");
+        document
+          .querySelectorAll(".page")
+          .forEach((p) => p.classList.remove("active"));
+        document.getElementById("page-" + tab)?.classList.add("active");
+        if (tab === "history") loadHistory();
+        if (tab === "leaderboard") loadLeaderboard();
+        if (tab === "clubs") loadClubs();
+      }
+
+      // ═══════════════════════════════════════════════════════════
+      //  CLUBS
+      // ═══════════════════════════════════════════════════════════
+      async function loadClubs() {
+        const cont = document.getElementById("clubs-container");
+        cont.innerHTML =
+          '<div class="loading-block"><span class="spinner"></span></div>';
+        try {
+          const clubs = await api("GET", "/clubs/");
+          if (!clubs.length) {
+            cont.innerHTML = `<div class="empty"><div class="empty-icon">♣</div><div class="empty-text">No clubs yet.<br>Create one to get started.</div></div>`;
+            return;
+          }
+          cont.innerHTML = clubs
+            .map(
+              (c) => `
+      <div class="card" style="cursor:pointer" onclick="openClub('${c.id}','${escHtml(c.name)}')">
+        <div class="card-body">
+          <div class="card-row">
+            <div>
+              <div class="card-title">${escHtml(c.name)}</div>
+              <div class="card-sub">Opened ${fmtDate(c.opened_at)}</div>
+            </div>
+            <span style="color:var(--gold);font-size:20px;">›</span>
+          </div>
+        </div>
+      </div>
+    `,
+            )
+            .join("");
+        } catch (e) {
+          cont.innerHTML = `<div class="empty"><div class="empty-text">${e.message}</div></div>`;
+        }
+      }
+
+      async function openClub(id, name) {
+        currentClub = { id, name };
+        document.getElementById("club-detail-name").textContent = name;
+        document.getElementById("clubs-list-view").style.display = "none";
+        document.getElementById("clubs-detail-view").style.display = "block";
+        showClubTab("tables");
+      }
+
+      function backToClubs() {
+        currentClub = null;
+        document.getElementById("clubs-list-view").style.display = "block";
+        document.getElementById("clubs-detail-view").style.display = "none";
+        loadClubs();
+      }
+
+      function showClubTab(tab) {
+        currentClubTab = tab;
+        ["tables", "members", "leaderboard"].forEach((t) => {
+          document.getElementById("club-" + t + "-section").style.display =
+            t === tab ? "block" : "none";
+          document
+            .getElementById("ctab-" + t)
+            .classList.toggle("active", t === tab);
+          // add gold styling to active tab
+          const btn = document.getElementById("ctab-" + t);
+          if (t === tab) {
+            btn.style.borderColor = "var(--gold-dim)";
+            btn.style.color = "var(--gold)";
+          } else {
+            btn.style.borderColor = "";
+            btn.style.color = "";
+          }
+        });
+        if (tab === "tables") loadClubTables();
+        if (tab === "members") loadClubMembers();
+        if (tab === "leaderboard") loadClubLeaderboard();
+      }
+
+      async function loadClubTables() {
+        const cont = document.getElementById("club-tables-container");
+        cont.innerHTML =
+          '<div class="loading-block"><span class="spinner"></span></div>';
+        try {
+          const tables = await api("GET", `/clubs/${currentClub.id}/tables`);
+          document.getElementById("club-detail-sub").textContent =
+            `${tables.length} table${tables.length !== 1 ? "s" : ""}`;
+          if (!tables.length) {
+            cont.innerHTML = `<div class="empty"><div class="empty-icon">◈</div><div class="empty-text">No tables yet.</div></div>`;
+            return;
+          }
+          cont.innerHTML = tables
+            .map(
+              (t) => `
+      <div class="card" style="cursor:pointer;margin-bottom:10px" onclick="openTable('${t.id}')">
+        <div class="card-body">
+          <div class="card-row">
+            <div>
+              <div class="card-title">Table <span style="color:var(--text-dim);font-size:12px">#${t.id.slice(0, 8)}</span></div>
+              <div class="meta-row">
+                <span class="meta-item">Bank: <span style="color:var(--gold)">${fmt(t.bank)}</span></span>
+                <span class="meta-item">${fmtDate(t.started_at)}</span>
+              </div>
+            </div>
+            <span class="badge ${t.finished ? "badge-dim" : "badge-green"}">${t.finished ? "Closed" : "Live"}</span>
+          </div>
+        </div>
+      </div>
+    `,
+            )
+            .join("");
+        } catch (e) {
+          cont.innerHTML = `<div class="empty"><div class="empty-text">${e.message}</div></div>`;
+        }
+      }
+
+      async function loadClubMembers() {
+        const cont = document.getElementById("club-members-container");
+        cont.innerHTML =
+          '<div class="loading-block"><span class="spinner"></span></div>';
+        try {
+          const members = await api("GET", `/clubs/${currentClub.id}/members`);
+          cont.innerHTML = members
+            .map(
+              (m) => `
+      <div class="player-row">
+        <div class="player-avatar">${m.username.charAt(0).toUpperCase()}</div>
+        <div class="player-info">
+          <div class="player-name">${escHtml(m.username)}</div>
+          <div class="player-stats">${escHtml(m.email)}</div>
+        </div>
+      </div>
+    `,
+            )
+            .join("");
+        } catch (e) {
+          cont.innerHTML = `<div class="empty"><div class="empty-text">${e.message}</div></div>`;
+        }
+      }
+
+      async function loadClubLeaderboard() {
+        const cont = document.getElementById("club-lb-container");
+        cont.innerHTML =
+          '<div class="loading-block"><span class="spinner"></span></div>';
+        try {
+          const lb = await api("GET", `/clubs/${currentClub.id}/leaderboard`);
+          renderLeaderboardInto(cont, lb);
+        } catch (e) {
+          cont.innerHTML = `<div class="empty"><div class="empty-text">${e.message}</div></div>`;
+        }
+      }
+
+      async function joinClub() {
+        try {
+          await api("POST", `/clubs/${currentClub.id}/members`);
+          toast("Joined club!", "success");
+          loadClubMembers();
+        } catch (e) {
+          toast(e.message, "error");
+        }
+      }
+
+      function openCreateClubModal() {
+        openModal("modal-create-club");
+      }
+
+      async function createClub() {
+        const name = document.getElementById("new-club-name").value.trim();
+        if (name.length < 4)
+          return toast("Name must be at least 4 characters", "error");
+        try {
+          await api("POST", "/clubs/", { name });
+          closeModal("modal-create-club");
+          document.getElementById("new-club-name").value = "";
+          toast("Club created!", "success");
+          loadClubs();
+        } catch (e) {
+          toast(e.message, "error");
+        }
+      }
+
+      // ═══════════════════════════════════════════════════════════
+      //  TABLES
+      // ═══════════════════════════════════════════════════════════
+      async function openTable(id) {
+        currentTable = { id };
+        // switch to table page
+        document
+          .querySelectorAll(".page")
+          .forEach((p) => p.classList.remove("active"));
+        document.getElementById("page-table").classList.add("active");
+        document.getElementById("table-detail-name").textContent = "Table";
+        document.getElementById("table-detail-sub").textContent =
+          "#" + id.slice(0, 8);
+        await loadTableDetail();
+      }
+
+      async function loadTableDetail() {
+        const id = currentTable.id;
+        try {
+          const [table, players] = await Promise.all([
+            api("GET", `/tables/${id}`),
+            api("GET", `/tables/${id}/players`),
+          ]);
+          currentTable = { ...currentTable, ...table, players };
+
+          // Status badge
+          const badge = document.getElementById("table-status-badge");
+          badge.className =
+            "badge " + (table.finished ? "badge-dim" : "badge-green");
+          badge.textContent = table.finished ? "Closed" : "Live";
+
+          // Stats
+          document.getElementById("tstat-bank").textContent = fmt(table.bank);
+          document.getElementById("tstat-players").textContent = players.length;
+
+          // Actions
+          const isPlaying = players.find(
+            (p) => p.user_id === me?.id && p.is_playing,
+          );
+          const hasJoined = players.find((p) => p.user_id === me?.id);
+          document.getElementById("btn-join-table").style.display =
+            !hasJoined && !table.finished ? "flex" : "none";
+          document.getElementById("btn-leave-table").style.display =
+            isPlaying && !table.finished ? "flex" : "none";
+          document.getElementById("btn-close-table").style.display =
+            !table.finished ? "flex" : "none";
+
+          // Players list
+          const cont = document.getElementById("table-players-container");
+          if (!players.length) {
+            cont.innerHTML = `<div class="empty"><div class="empty-icon">♠</div><div class="empty-text">No players yet.</div></div>`;
+          } else {
+            cont.innerHTML = players
+              .map((p) => {
+                const net = p.cash_out - p.buy_in;
+                const netCls = net > 0 ? "pos" : net < 0 ? "neg" : "neu";
+                const canCharge = !table.finished;
+                return `
+        <div class="player-row">
+          <div class="player-avatar">${p.username.charAt(0).toUpperCase()}</div>
+          <div class="player-info">
+            <div class="player-name">${escHtml(p.username)} ${!p.is_playing ? '<span class="badge badge-dim" style="font-size:9px">out</span>' : ""}</div>
+            <div class="player-stats">Buy-in: ${fmt(p.buy_in)} · Cash-out: ${fmt(p.cash_out)}</div>
+          </div>
+          <div class="player-actions">
+            <span class="chip-amount ${netCls}">${net >= 0 ? "+" : ""}${fmt(net)}</span>
+            ${canCharge && p.is_playing ? `<button class="btn btn-ghost btn-icon" onclick="openChargeModal('${p.id}')" title="Add buy-in">+</button>` : ""}
+          </div>
+        </div>`;
+              })
+              .join("");
+          }
+
+          // Results if finished
+          if (table.finished) {
+            document.getElementById("table-results-section").style.display =
+              "block";
+            const resCont = document.getElementById("table-results-container");
+            try {
+              const results = await api("GET", `/tables/${id}/results`);
+              if (!results.transactions.length) {
+                resCont.innerHTML = `<div class="empty"><div class="empty-text">All even — no settlements needed.</div></div>`;
+              } else {
+                resCont.innerHTML = results.transactions
+                  .map(
+                    (tx) => `
+            <div class="tx-row">
+              <span style="color:var(--red);">${escHtml(tx.giver)}</span>
+              <span class="tx-arrow">→</span>
+              <span style="color:#4caf72;">${escHtml(tx.getter)}</span>
+              <span class="tx-amount">${fmt(tx.money)}</span>
+            </div>
+          `,
+                  )
+                  .join("");
+              }
+            } catch (e) {
+              resCont.innerHTML = `<div class="empty"><div class="empty-text">${e.message}</div></div>`;
+            }
+          } else {
+            document.getElementById("table-results-section").style.display =
+              "none";
+          }
+        } catch (e) {
+          toast(e.message, "error");
+        }
+      }
+
+      function backToClub() {
+        currentTable = null;
+        document
+          .querySelectorAll(".page")
+          .forEach((p) => p.classList.remove("active"));
+        document.getElementById("page-clubs").classList.add("active");
+        if (currentClub) showClubTab("tables");
+      }
+
+      async function joinCurrentTable() {
+        try {
+          await api("POST", `/tables/${currentTable.id}/players`);
+          toast("Joined table!", "success");
+          loadTableDetail();
+        } catch (e) {
+          toast(e.message, "error");
+        }
+      }
+
+      function openLeaveModal() {
+        // Prefill with current buy-in as suggestion
+        const myPlayer = currentTable?.players?.find(
+          (p) => p.user_id === me?.id,
+        );
+        const bank = currentTable?.bank || 0;
+        const suggest = myPlayer ? myPlayer.buy_in : 0;
+        document.getElementById("leave-amount").value = suggest;
+        // Generate presets
+        const presets = document.getElementById("leave-presets");
+        const opts = [
+          0,
+          Math.floor(suggest * 0.5),
+          suggest,
+          Math.floor(suggest * 1.5),
+          suggest * 2,
+        ].filter((v, i, a) => v >= 0 && a.indexOf(v) === i);
+        presets.innerHTML = opts
+          .map(
+            (o) =>
+              `<span class="preset-chip" onclick="setLeave(${o})">${fmt(o)}</span>`,
+          )
+          .join("");
+        openModal("modal-leave");
+      }
+      function setLeave(v) {
+        document.getElementById("leave-amount").value = v;
+      }
+      function adjustLeave(d) {
+        const el = document.getElementById("leave-amount");
+        el.value = Math.max(0, parseInt(el.value || 0) + d);
+      }
+
+      async function leaveTable() {
+        const cashOut = parseInt(document.getElementById("leave-amount").value);
+        if (isNaN(cashOut) || cashOut < 0)
+          return toast("Invalid amount", "error");
+        try {
+          await api("PUT", `/tables/${currentTable.id}/players`, undefined, {
+            cash_out: cashOut,
+          });
+          closeModal("modal-leave");
+          toast("Cashed out!", "success");
+          loadTableDetail();
+        } catch (e) {
+          toast(e.message, "error");
+        }
+      }
+
+      function openCreateTableModal() {
+        openModal("modal-create-table");
+      }
+
+      async function createTable() {
+        const joinAsPlayer =
+          document.getElementById("new-table-join").value === "true";
+        try {
+          await api("POST", `/clubs/${currentClub.id}/tables`, undefined, {
+            join_as_player: joinAsPlayer,
+          });
+          closeModal("modal-create-table");
+          toast("Table opened!", "success");
+          loadClubTables();
+        } catch (e) {
+          toast(e.message, "error");
+        }
+      }
+
+      function openCloseTableModal() {
+        openModal("modal-close-table");
+      }
+
+      async function closeTable() {
+        try {
+          await api("PUT", `/tables/${currentTable.id}`);
+          closeModal("modal-close-table");
+          toast("Table closed.", "success");
+          loadTableDetail();
+        } catch (e) {
+          toast(e.message, "error");
+        }
+      }
+
+      // ═══════════════════════════════════════════════════════════
+      //  PLAYERS — CHARGE
+      // ═══════════════════════════════════════════════════════════
+      function openChargeModal(playerId) {
+        document.getElementById("charge-player-id").value = playerId;
+        document.getElementById("charge-amount").value = 100;
+        openModal("modal-charge");
+      }
+      function adjustCharge(d) {
+        const el = document.getElementById("charge-amount");
+        el.value = Math.max(1, parseInt(el.value || 0) + d);
+      }
+      function setCharge(v) {
+        document.getElementById("charge-amount").value = v;
+      }
+
+      async function chargePlayer() {
+        const playerId = document.getElementById("charge-player-id").value;
+        const amount = parseInt(document.getElementById("charge-amount").value);
+        if (!amount || amount < 1) return toast("Invalid amount", "error");
+        try {
+          await api("PUT", `/players/${playerId}`, undefined, { amount });
+          closeModal("modal-charge");
+          toast(`Buy-in added: ${fmt(amount)}`, "success");
+          loadTableDetail();
+        } catch (e) {
+          toast(e.message, "error");
+        }
+      }
+
+      // ═══════════════════════════════════════════════════════════
+      //  HISTORY
+      // ═══════════════════════════════════════════════════════════
+      async function loadHistory() {
+        const cont = document.getElementById("history-container");
+        cont.innerHTML =
+          '<div class="loading-block"><span class="spinner"></span></div>';
+        try {
+          const data = await api("GET", "/users/me/history");
+          const balance = data.net_balance;
+          const cls = balance > 0 ? "pos" : balance < 0 ? "neg" : "neu";
+          document.getElementById("hstat-balance").className =
+            "stat-value chip-amount " + cls;
+          document.getElementById("hstat-balance").textContent =
+            (balance >= 0 ? "+" : "") + fmt(balance);
+          document.getElementById("hstat-sessions").textContent =
+            data.history.length;
+          // parse HH:MM:SS
+          const parts = data.total_time.split(":");
+          const totalH = parts[0] ? parseInt(parts[0]) : 0;
+          document.getElementById("hstat-time").textContent = totalH;
+
+          if (!data.history.length) {
+            cont.innerHTML = `<div class="empty"><div class="empty-icon">◈</div><div class="empty-text">No sessions yet.</div></div>`;
+            return;
+          }
+
+          cont.innerHTML = data.history
+            .map((p) => {
+              const net = p.cash_out - p.buy_in;
+              const netCls = net > 0 ? "pos" : net < 0 ? "neg" : "neu";
+              return `
+        <div class="history-row">
+          <div>
+            <div style="font-size:13px;">Table <span style="color:var(--text-dim)">#${p.table_id.slice(0, 8)}</span></div>
+            <div class="history-date">Buy-in ${fmt(p.buy_in)} · Cash-out ${fmt(p.cash_out)}</div>
+          </div>
+          <div class="chip-amount ${netCls} history-amount">${net >= 0 ? "+" : ""}${fmt(net)}</div>
+        </div>`;
+            })
+            .join("");
+        } catch (e) {
+          cont.innerHTML = `<div class="empty"><div class="empty-text">${e.message}</div></div>`;
+        }
+      }
+
+      // ═══════════════════════════════════════════════════════════
+      //  LEADERBOARD
+      // ═══════════════════════════════════════════════════════════
+      async function loadLeaderboard() {
+        const cont = document.getElementById("leaderboard-container");
+        cont.innerHTML =
+          '<div class="loading-block"><span class="spinner"></span></div>';
+        try {
+          const lb = await api("GET", "/users/leaderboard");
+          renderLeaderboardInto(cont, lb);
+        } catch (e) {
+          cont.innerHTML = `<div class="empty"><div class="empty-text">${e.message}</div></div>`;
+        }
+      }
+
+      function renderLeaderboardInto(cont, lb) {
+        const entries = Object.entries(lb).sort((a, b) => b[1] - a[1]);
+        if (!entries.length) {
+          cont.innerHTML = `<div class="empty"><div class="empty-text">No finished games yet.</div></div>`;
+          return;
+        }
+        const medals = ["🥇", "🥈", "🥉"];
+        cont.innerHTML = entries
+          .map(([name, balance], i) => {
+            const cls =
+              balance > 0 ? "positive" : balance < 0 ? "negative" : "";
+            const rankCls =
+              i === 0 ? "top1" : i === 1 ? "top2" : i === 2 ? "top3" : "";
+            return `
+    <div class="lb-row">
+      <div class="lb-rank ${rankCls}">${medals[i] || i + 1}</div>
+      <div class="lb-name">${escHtml(name)}</div>
+      <div class="lb-balance ${cls}">${balance >= 0 ? "+" : ""}${fmt(balance)}</div>
+    </div>`;
+          })
+          .join("");
+      }
+
+      // ═══════════════════════════════════════════════════════════
+      //  MODAL HELPERS
+      // ═══════════════════════════════════════════════════════════
+      function openModal(id) {
+        document.getElementById(id).classList.add("open");
+      }
+      function closeModal(id) {
+        document.getElementById(id).classList.remove("open");
+      }
+      // Close modal on overlay click
+      document.querySelectorAll(".modal-overlay").forEach((overlay) => {
+        overlay.addEventListener("click", (e) => {
+          if (e.target === overlay) overlay.classList.remove("open");
+        });
+      });
+
+      // ═══════════════════════════════════════════════════════════
+      //  UTILS
+      // ═══════════════════════════════════════════════════════════
+      function fmt(n) {
+        return n == null ? "—" : n.toLocaleString();
+      }
+      function fmtDate(s) {
+        if (!s) return "";
+        const d = new Date(s);
+        return d.toLocaleDateString("en-GB", {
+          day: "numeric",
+          month: "short",
+          year: "numeric",
+        });
+      }
+      function escHtml(s) {
+        return String(s)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+
+      // ═══════════════════════════════════════════════════════════
+      //  BOOT
+      // ═══════════════════════════════════════════════════════════
+      if (token && me) {
+        enterApp();
+      }
+    </script>
+  </body>
+</html>
