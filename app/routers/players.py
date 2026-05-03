@@ -8,9 +8,10 @@ from sqlalchemy.orm import selectinload
 from starlette import status
 
 from ..db import get_async_session
-from ..models import GameTable, Player, User
+from ..models import Club, GameTable, Player, User
 from ..schemas import PlayerResponse
 from .auth import current_active_user
+from .tables import validate_permission as validate_table_permission
 
 router = APIRouter(prefix="/players", tags=["players"])
 
@@ -36,6 +37,19 @@ async def get_player_model(
     return player
 
 
+async def _get_player_model(
+    player_id: uuid.UUID,
+    session: AsyncSession,
+):
+    return await get_player_model(
+        player_id,
+        session,
+        selectinload(Player.table)
+        .selectinload(GameTable.club)
+        .selectinload(Club.members),
+    )
+
+
 def validate_permission(user: User, player: Player):
     if not (
         user.is_superuser  # Admin
@@ -55,13 +69,11 @@ async def get_player(
     user: User = Depends(current_active_user),
     session: AsyncSession = Depends(get_async_session),
 ) -> PlayerResponse:
-    player = await get_player_model(
-        player_id, session, selectinload(Player.table).selectinload(GameTable.club)
-    )
+    player = await _get_player_model(player_id, session)
 
     validate_permission(user, player)
 
-    return PlayerResponse.model_validate(await get_player_model(player_id, session))
+    return PlayerResponse.model_validate(player)
 
 
 @router.put("/{player_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -71,12 +83,11 @@ async def charge_player(
     user: User = Depends(current_active_user),
     session: AsyncSession = Depends(get_async_session),
 ) -> None:
-    player = await get_player_model(
-        player_id, session, selectinload(Player.table).selectinload(GameTable.club)
-    )
-    table = player.table
+    player = await _get_player_model(player_id, session)
 
     validate_permission(user, player)
+
+    table = player.table
 
     if table.finished:
         raise HTTPException(
@@ -94,9 +105,7 @@ async def delete_player(
     user: User = Depends(current_active_user),
     session: AsyncSession = Depends(get_async_session),
 ):
-    player = await get_player_model(
-        player_id, session, selectinload(Player.table).selectinload(GameTable.club)
-    )
+    player = await _get_player_model(player_id, session)
 
     validate_permission(user, player)
 
