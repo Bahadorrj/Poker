@@ -59,6 +59,7 @@ def validate_permission(user: User, table: GameTable):
         not user.is_superuser  # Admin
         and table.owner_id != user.id  # Table owner
         and table.club.owner_id != user.id  # Club owner
+        and user not in table.club.members
     ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
