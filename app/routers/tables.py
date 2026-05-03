@@ -11,7 +11,7 @@ from starlette import status
 from app.routers.players import get_player_model
 
 from ..db import get_async_session
-from ..models import GameTable, Player, User
+from ..models import Club, GameTable, Player, User
 from ..schemas import (
     PlayerResponse,
     ResultResponse,
@@ -44,6 +44,16 @@ async def get_table_model(
     return table
 
 
+async def _get_table_model(table_id: uuid.UUID, session: AsyncSession):
+    return await get_table_model(
+        table_id,
+        session,
+        selectinload(GameTable.club).selectinload(Club.members),
+        selectinload(GameTable.owner),
+        selectinload(GameTable.players).selectinload(Player.user),
+    )
+
+
 def validate_permission(user: User, table: GameTable):
     if (
         not user.is_superuser  # Admin
@@ -62,7 +72,7 @@ async def get_table(
     user: User = Depends(current_active_user),
     session: AsyncSession = Depends(get_async_session),
 ) -> TableResponse:
-    table = await get_table_model(table_id, session)
+    table = await _get_table_model(table_id, session)
 
     validate_permission(user, table)
 
@@ -75,12 +85,7 @@ async def close_table(
     user: User = Depends(current_active_user),
     session: AsyncSession = Depends(get_async_session),
 ) -> None:
-    table = await get_table_model(
-        table_id,
-        session,
-        selectinload(GameTable.players).selectinload(Player.user),
-        selectinload(GameTable.club),
-    )
+    table = await _get_table_model(table_id, session)
 
     validate_permission(user, table)
 
@@ -110,7 +115,7 @@ async def delete_table(
     user: User = Depends(current_active_user),
     session: AsyncSession = Depends(get_async_session),
 ):
-    table = await get_table_model(table_id, session)
+    table = await _get_table_model(table_id, session)
 
     if (
         not user.is_superuser  # Admin
@@ -132,7 +137,7 @@ async def join_table(
     user: User = Depends(current_active_user),
     session: AsyncSession = Depends(get_async_session),
 ) -> uuid.UUID:
-    table = await get_table_model(table_id, session)
+    table = await _get_table_model(table_id, session)
 
     if table.finished:
         raise HTTPException(
@@ -168,9 +173,7 @@ async def get_table_players(
     user: User = Depends(current_active_user),
     session: AsyncSession = Depends(get_async_session),
 ) -> list[PlayerResponse]:
-    table = await get_table_model(
-        table_id, session, selectinload(GameTable.players).selectinload(Player.user)
-    )
+    table = await _get_table_model(table_id, session)
 
     validate_permission(user, table)
 
@@ -184,7 +187,7 @@ async def leave_table(
     user: User = Depends(current_active_user),
     session: AsyncSession = Depends(get_async_session),
 ):
-    table = await get_table_model(table_id, session)
+    table = await _get_table_model(table_id, session)
 
     if table.finished:
         raise HTTPException(
@@ -226,7 +229,7 @@ async def remove_player(
     user: User = Depends(current_active_user),
     session: AsyncSession = Depends(get_async_session),
 ):
-    table = await get_table_model(table_id, session)
+    table = await _get_table_model(table_id, session)
 
     if table.finished:
         raise HTTPException(
@@ -288,9 +291,7 @@ async def get_table_results(
     user: User = Depends(current_active_user),
     session: AsyncSession = Depends(get_async_session),
 ) -> ResultResponse:
-    table = await get_table_model(
-        table_id, session, selectinload(GameTable.players).selectinload(Player.user)
-    )
+    table = await _get_table_model(table_id, session)
 
     validate_permission(user, table)
 
