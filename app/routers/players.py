@@ -51,16 +51,10 @@ async def _get_player_model(
 
 
 def validate_permission(user: User, player: Player):
-    if not (
-        user.is_superuser  # Admin
-        or player.user_id == user.id  # Player himself
-        or player.table.owner_id == user.id  # Table owner
-        or player.table.club.owner_id == user.id  #  Club owner
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You do not have permission to get this player",
-        )
+    if user.is_superuser:  # Admin
+        return
+
+    validate_table_permission(user, player.table)
 
 
 @router.get("/{player_id}")
