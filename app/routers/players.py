@@ -68,7 +68,7 @@ async def get_player(
     return PlayerResponse.model_validate(player)
 
 
-@router.put("/{player_id}")
+@router.patch("/{player_id}")
 async def update_player(
     player_id: uuid.UUID,
     player_update: PlayerUpdate,
