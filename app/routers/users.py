@@ -87,7 +87,7 @@ async def get_history_response(session: AsyncSession, user: User):
     )
 
 
-@user_router.get("/me/history")
+@user_router.get("/history")
 async def get_history(
     session: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_active_user),
