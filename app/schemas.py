@@ -30,9 +30,13 @@ class PlayerResponse(PokerBaseModel):
     cash_out: int = Field(ge=0)
     is_playing: bool = True
 
+class PlayerUpdate(BaseModel):
+    buy_in: int = Field(ge=0)
+    cash_out: int = Field(ge=0)
+
 
 class PayloadRequest(BaseModel):
-    amount: int = Field(gt=0)
+    amount: int = Field(ge=0)
 
 
 class UserHistoryResponse(PokerBaseModel):

@@ -9,7 +9,7 @@ from starlette import status
 
 from ..db import get_async_session
 from ..models import Club, GameTable, Player, User
-from ..schemas import PlayerResponse
+from ..schemas import PlayerResponse, PlayerUpdate
 from .auth import current_active_user
 
 router = APIRouter(prefix="/players", tags=["players"])
@@ -66,6 +66,31 @@ async def get_player(
     player = await _get_player_model(player_id, user, session)
 
     return PlayerResponse.model_validate(player)
+
+
+@router.put("/{player_id}")
+async def update_player(
+    player_id: uuid.UUID,
+    player_update: PlayerUpdate,
+    user: User = Depends(current_active_user),
+    session: AsyncSession = Depends(get_async_session),
+):
+    player = await get_player_model(
+        player_id,
+        session,
+        selectinload(Player.table)
+        .selectinload(GameTable.club)
+        .selectinload(Club.members),
+    )
+
+    from .tables import super_permission
+
+    super_permission(user, player.table)
+
+    player.buy_in = player_update.buy_in
+    player.cash_out = player_update.cash_out
+
+    await session.commit()
 
 
 @router.delete("/{player_id}", status_code=status.HTTP_204_NO_CONTENT)
