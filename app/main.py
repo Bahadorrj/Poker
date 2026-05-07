@@ -46,11 +46,11 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
 # Auth
 app.include_router(auth.router)
 
-# Clubs
-app.include_router(clubs.router)
-
 # Users
 app.include_router(users.router)
+
+# Clubs
+app.include_router(clubs.router)
 
 # Tables
 app.include_router(tables.router)
