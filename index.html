@@ -1128,6 +1128,11 @@
               </div>
             </div>
 
+            <!--
+              btn-join-table  : all users (any member can sit down)
+              btn-close-table : privileged only (superuser / table owner / club owner)
+              Cash Out is per-player in the player list, also privileged only.
+            -->
             <div
               id="table-actions"
               class="mb-4"
@@ -1139,13 +1144,6 @@
                 id="btn-join-table"
               >
                 Join Table
-              </button>
-              <button
-                class="btn btn-secondary btn-sm"
-                onclick="openLeaveModal()"
-                id="btn-leave-table"
-              >
-                Cash Out
               </button>
               <button
                 class="btn btn-ghost btn-sm"
@@ -1308,37 +1306,43 @@
       </div>
     </div>
 
-    <!-- Cash Out / Leave -->
-    <div class="modal-overlay" id="modal-leave">
+    <!-- Cash Out (privileged: targets a specific player) -->
+    <div class="modal-overlay" id="modal-cashout">
       <div class="modal">
         <div class="modal-handle"></div>
         <div class="modal-title">Cash Out</div>
+        <p id="cashout-player-label" style="font-size:12px;color:var(--text-dim);margin-bottom:16px;"></p>
         <div class="field">
-          <label>Your cash-out amount</label>
+          <label>Cash-out amount</label>
           <div class="num-input-row">
-            <button class="num-btn" onclick="adjustLeave(-10)">−</button>
+            <button class="num-btn" onclick="adjustCashOut(-10)">−</button>
             <input
               type="number"
-              id="leave-amount"
+              id="cashout-amount"
               value="0"
               min="0"
-              class="field"
               style="
                 flex: 1;
                 text-align: center;
                 font-size: 22px;
                 padding: 12px;
+                background: var(--surface2);
+                border: 1px solid var(--border);
+                border-radius: var(--radius-sm);
+                color: var(--text);
+                font-family: 'DM Mono', monospace;
               "
             />
-            <button class="num-btn" onclick="adjustLeave(10)">+</button>
+            <button class="num-btn" onclick="adjustCashOut(10)">+</button>
           </div>
-          <div class="preset-row" id="leave-presets"></div>
+          <div class="preset-row" id="cashout-presets"></div>
         </div>
+        <input type="hidden" id="cashout-player-id" />
         <div class="modal-actions">
-          <button class="btn btn-ghost" onclick="closeModal('modal-leave')">
+          <button class="btn btn-ghost" onclick="closeModal('modal-cashout')">
             Cancel
           </button>
-          <button class="btn btn-primary" onclick="leaveTable()">
+          <button class="btn btn-primary" onclick="cashOutPlayer()">
             Confirm
           </button>
         </div>
@@ -1428,10 +1432,23 @@
       // ═══════════════════════════════════════════════════════════
       let token = localStorage.getItem("poker_token") || null;
       let me = JSON.parse(localStorage.getItem("poker_me") || "null");
-      let currentClub = null;
-      let currentTable = null;
+      let currentClub = null;   // { id, name, owner_id }
+      let currentTable = null;  // { id, owner_id, club_owner_id, players, ... }
       let currentTab = "clubs";
       let currentClubTab = "tables";
+
+      // ═══════════════════════════════════════════════════════════
+      //  PRIVILEGE HELPER
+      //  Returns true for superuser, table owner, or club owner.
+      // ═══════════════════════════════════════════════════════════
+      function isPrivileged() {
+        if (!me || !currentTable) return false;
+        return (
+          me.is_superuser ||
+          me.id === currentTable.owner_id ||
+          me.id === currentTable.club_owner_id
+        );
+      }
 
       // ═══════════════════════════════════════════════════════════
       //  API HELPERS
@@ -1601,7 +1618,7 @@
           cont.innerHTML = clubs
             .map(
               (c) => `
-      <div class="card" style="cursor:pointer" onclick="openClub('${c.id}','${escHtml(c.name)}')">
+      <div class="card" style="cursor:pointer" onclick="openClub('${c.id}','${escHtml(c.name)}','${c.owner_id}')">
         <div class="card-body">
           <div class="card-row">
             <div>
@@ -1620,8 +1637,8 @@
         }
       }
 
-      async function openClub(id, name) {
-        currentClub = { id, name };
+      async function openClub(id, name, ownerId) {
+        currentClub = { id, name, owner_id: ownerId };
         document.getElementById("club-detail-name").textContent = name;
         document.getElementById("clubs-list-view").style.display = "none";
         document.getElementById("clubs-detail-view").style.display = "block";
@@ -1779,11 +1796,29 @@
       async function loadTableDetail() {
         const id = currentTable.id;
         try {
+          // Fetch table and its players in parallel.
+          // Also fetch the club to obtain club owner_id for privilege checks.
           const [table, players] = await Promise.all([
             api("GET", `/tables/${id}`),
             api("GET", `/tables/${id}/players`),
           ]);
-          currentTable = { ...currentTable, ...table, players };
+
+          // Resolve club owner: prefer currentClub (already fetched) or fetch now.
+          let clubOwnerId = currentClub?.owner_id ?? null;
+          if (!clubOwnerId) {
+            // We landed here without a currentClub context (e.g. deep-link).
+            // Fetch the club info via the table's owner endpoint isn't available
+            // directly, so we skip — privilege buttons will just not appear.
+          }
+
+          currentTable = {
+            ...currentTable,
+            ...table,
+            players,
+            club_owner_id: clubOwnerId,
+          };
+
+          const privileged = isPrivileged();
 
           // Status badge
           const badge = document.getElementById("table-status-badge");
@@ -1795,17 +1830,13 @@
           document.getElementById("tstat-bank").textContent = fmt(table.bank);
           document.getElementById("tstat-players").textContent = players.length;
 
-          // Actions
-          const isPlaying = players.find(
-            (p) => p.user_id === me?.id && p.is_playing,
-          );
+          // Table-level action buttons
           const hasJoined = players.find((p) => p.user_id === me?.id);
           document.getElementById("btn-join-table").style.display =
             !hasJoined && !table.finished ? "flex" : "none";
-          document.getElementById("btn-leave-table").style.display =
-            isPlaying && !table.finished ? "flex" : "none";
+          // Close button: privileged users only, and only while table is live
           document.getElementById("btn-close-table").style.display =
-            !table.finished ? "flex" : "none";
+            privileged && !table.finished ? "flex" : "none";
 
           // Players list
           const cont = document.getElementById("table-players-container");
@@ -1816,7 +1847,9 @@
               .map((p) => {
                 const net = p.cash_out - p.buy_in;
                 const netCls = net > 0 ? "pos" : net < 0 ? "neg" : "neu";
-                const canCharge = !table.finished;
+                // Per-player privileged actions (cash out, add buy-in) only shown to
+                // superusers, the table owner, or the club owner.
+                const showActions = privileged && !table.finished && p.is_playing;
                 return `
         <div class="player-row">
           <div class="player-avatar">${p.username.charAt(0).toUpperCase()}</div>
@@ -1826,7 +1859,10 @@
           </div>
           <div class="player-actions">
             <span class="chip-amount ${netCls}">${net >= 0 ? "+" : ""}${fmt(net)}</span>
-            ${canCharge && p.is_playing ? `<button class="btn btn-ghost btn-icon" onclick="openChargeModal('${p.id}')" title="Add buy-in">+</button>` : ""}
+            ${showActions ? `
+              <button class="btn btn-ghost btn-icon" onclick="openCashOutModal('${p.id}','${escHtml(p.username)}',${p.buy_in})" title="Cash out">✓</button>
+              <button class="btn btn-ghost btn-icon" onclick="openChargeModal('${p.id}')" title="Add buy-in">+</button>
+            ` : ""}
           </div>
         </div>`;
               })
@@ -1887,55 +1923,6 @@
         }
       }
 
-      function openLeaveModal() {
-        // Prefill with current buy-in as suggestion
-        const myPlayer = currentTable?.players?.find(
-          (p) => p.user_id === me?.id,
-        );
-        const bank = currentTable?.bank || 0;
-        const suggest = myPlayer ? myPlayer.buy_in : 0;
-        document.getElementById("leave-amount").value = suggest;
-        // Generate presets
-        const presets = document.getElementById("leave-presets");
-        const opts = [
-          0,
-          Math.floor(suggest * 0.5),
-          suggest,
-          Math.floor(suggest * 1.5),
-          suggest * 2,
-        ].filter((v, i, a) => v >= 0 && a.indexOf(v) === i);
-        presets.innerHTML = opts
-          .map(
-            (o) =>
-              `<span class="preset-chip" onclick="setLeave(${o})">${fmt(o)}</span>`,
-          )
-          .join("");
-        openModal("modal-leave");
-      }
-      function setLeave(v) {
-        document.getElementById("leave-amount").value = v;
-      }
-      function adjustLeave(d) {
-        const el = document.getElementById("leave-amount");
-        el.value = Math.max(0, parseInt(el.value || 0) + d);
-      }
-
-      async function leaveTable() {
-        const cashOut = parseInt(document.getElementById("leave-amount").value);
-        if (isNaN(cashOut) || cashOut < 0)
-          return toast("Invalid amount", "error");
-        try {
-          await api("PUT", `/tables/${currentTable.id}/players`, undefined, {
-            cash_out: cashOut,
-          });
-          closeModal("modal-leave");
-          toast("Cashed out!", "success");
-          loadTableDetail();
-        } catch (e) {
-          toast(e.message, "error");
-        }
-      }
-
       function openCreateTableModal() {
         openModal("modal-create-table");
       }
@@ -1971,7 +1958,53 @@
       }
 
       // ═══════════════════════════════════════════════════════════
-      //  PLAYERS — CHARGE
+      //  CASH OUT (privileged: POST /tables/{tableId}/players/{playerId})
+      // ═══════════════════════════════════════════════════════════
+      function openCashOutModal(playerId, username, buyIn) {
+        document.getElementById("cashout-player-id").value = playerId;
+        document.getElementById("cashout-player-label").textContent =
+          `Player: ${username}`;
+        document.getElementById("cashout-amount").value = buyIn;
+
+        // Sensible preset amounts around the player's buy-in
+        const presets = document.getElementById("cashout-presets");
+        const opts = [0, Math.floor(buyIn * 0.5), buyIn, Math.floor(buyIn * 1.5), buyIn * 2]
+          .filter((v, i, a) => v >= 0 && a.indexOf(v) === i);
+        presets.innerHTML = opts
+          .map((o) => `<span class="preset-chip" onclick="setCashOut(${o})">${fmt(o)}</span>`)
+          .join("");
+
+        openModal("modal-cashout");
+      }
+      function setCashOut(v) {
+        document.getElementById("cashout-amount").value = v;
+      }
+      function adjustCashOut(d) {
+        const el = document.getElementById("cashout-amount");
+        el.value = Math.max(0, parseInt(el.value || 0) + d);
+      }
+
+      async function cashOutPlayer() {
+        const playerId = document.getElementById("cashout-player-id").value;
+        const amount = parseInt(document.getElementById("cashout-amount").value);
+        if (isNaN(amount) || amount < 0) return toast("Invalid amount", "error");
+        try {
+          // POST /tables/{tableId}/players/{playerId}  body: { amount }
+          await api(
+            "POST",
+            `/tables/${currentTable.id}/players/${playerId}`,
+            { amount },
+          );
+          closeModal("modal-cashout");
+          toast("Player cashed out!", "success");
+          loadTableDetail();
+        } catch (e) {
+          toast(e.message, "error");
+        }
+      }
+
+      // ═══════════════════════════════════════════════════════════
+      //  CHARGE PLAYER — ADD BUY-IN (privileged: PUT /tables/{tableId}/players/{playerId})
       // ═══════════════════════════════════════════════════════════
       function openChargeModal(playerId) {
         document.getElementById("charge-player-id").value = playerId;
@@ -1991,7 +2024,12 @@
         const amount = parseInt(document.getElementById("charge-amount").value);
         if (!amount || amount < 1) return toast("Invalid amount", "error");
         try {
-          await api("PUT", `/players/${playerId}`, undefined, { amount });
+          // PUT /tables/{tableId}/players/{playerId}  body: { amount }
+          await api(
+            "PUT",
+            `/tables/${currentTable.id}/players/${playerId}`,
+            { amount },
+          );
           closeModal("modal-charge");
           toast(`Buy-in added: ${fmt(amount)}`, "success");
           loadTableDetail();
