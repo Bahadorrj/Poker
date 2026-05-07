@@ -1,7 +1,7 @@
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -11,7 +11,6 @@ from ..db import get_async_session
 from ..models import Club, GameTable, Player, User
 from ..schemas import PlayerResponse
 from .auth import current_active_user
-from .tables import validate_permission as validate_table_permission
 
 router = APIRouter(prefix="/players", tags=["players"])
 
@@ -39,9 +38,12 @@ async def get_player_model(
 
 async def _get_player_model(
     player_id: uuid.UUID,
+    user: User,
     session: AsyncSession,
-):
-    return await get_player_model(
+) -> Player:
+    from .tables import member_permission
+
+    player = await get_player_model(
         player_id,
         session,
         selectinload(Player.table)
@@ -49,12 +51,10 @@ async def _get_player_model(
         .selectinload(Club.members),
     )
 
+    if not user.is_superuser:  # Admin
+        member_permission(user, player.table)
 
-def validate_permission(user: User, player: Player):
-    if user.is_superuser:  # Admin
-        return
-
-    validate_table_permission(user, player.table)
+    return player
 
 
 @router.get("/{player_id}")
@@ -63,34 +63,9 @@ async def get_player(
     user: User = Depends(current_active_user),
     session: AsyncSession = Depends(get_async_session),
 ) -> PlayerResponse:
-    player = await _get_player_model(player_id, session)
-
-    validate_permission(user, player)
+    player = await _get_player_model(player_id, user, session)
 
     return PlayerResponse.model_validate(player)
-
-
-@router.put("/{player_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def charge_player(
-    player_id: uuid.UUID,
-    amount: int = Query(gt=0),
-    user: User = Depends(current_active_user),
-    session: AsyncSession = Depends(get_async_session),
-) -> None:
-    player = await _get_player_model(player_id, session)
-
-    validate_permission(user, player)
-
-    table = player.table
-
-    if table.finished:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Table already finished"
-        )
-
-    player.buy_in += amount
-
-    await session.commit()
 
 
 @router.delete("/{player_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -99,9 +74,7 @@ async def delete_player(
     user: User = Depends(current_active_user),
     session: AsyncSession = Depends(get_async_session),
 ):
-    player = await _get_player_model(player_id, session)
-
-    validate_permission(user, player)
+    player = await _get_player_model(player_id, user, session)
 
     await session.delete(player)
     await session.commit()

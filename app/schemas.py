@@ -31,6 +31,10 @@ class PlayerResponse(PokerBaseModel):
     is_playing: bool = True
 
 
+class PayloadRequest(BaseModel):
+    amount: int = Field(gt=0)
+
+
 class UserHistoryResponse(PokerBaseModel):
     history: list[PlayerResponse]
     net_balance: int

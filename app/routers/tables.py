@@ -1,8 +1,7 @@
-import datetime
 import uuid
-from typing import Any, Iterable
+from typing import Any, Callable, Iterable
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -11,6 +10,7 @@ from starlette import status
 from ..db import get_async_session
 from ..models import Club, GameTable, Player, User
 from ..schemas import (
+    PayloadRequest,
     PlayerResponse,
     ResultResponse,
     TableResponse,
@@ -42,8 +42,35 @@ async def get_table_model(
     return table
 
 
-async def _get_table_model(table_id: uuid.UUID, session: AsyncSession):
-    return await get_table_model(
+def super_permission(user: User, table: GameTable):
+    """admin, table owner, or club owner"""
+    if (
+        not user.is_superuser  # Admin
+        and table.owner_id != user.id  # Table owner
+        and table.club.owner_id != user.id  # Club owner
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to get this table",
+        )
+
+
+def member_permission(user: User, table: GameTable):
+    """admin, table owner, club owner, or a member"""
+    try:
+        super_permission(user, table)
+    except HTTPException:
+        if user not in table.club.members:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have permission to get this table",
+            )
+
+
+async def _get_table_model(
+    table_id: uuid.UUID, permission: Callable | None, user: User, session: AsyncSession
+):
+    table = await get_table_model(
         table_id,
         session,
         selectinload(GameTable.club).selectinload(Club.members),
@@ -51,18 +78,10 @@ async def _get_table_model(table_id: uuid.UUID, session: AsyncSession):
         selectinload(GameTable.players).selectinload(Player.user),
     )
 
+    if permission is not None:
+        permission(user, table)
 
-def validate_permission(user: User, table: GameTable):
-    if (
-        not user.is_superuser  # Admin
-        and table.owner_id != user.id  # Table owner
-        and table.club.owner_id != user.id  # Club owner
-        and user not in table.club.members
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You do not have permission to close this table",
-        )
+    return table
 
 
 @router.get("/{table_id}")
@@ -71,9 +90,7 @@ async def get_table(
     user: User = Depends(current_active_user),
     session: AsyncSession = Depends(get_async_session),
 ) -> TableResponse:
-    table = await _get_table_model(table_id, session)
-
-    validate_permission(user, table)
+    table = await _get_table_model(table_id, member_permission, user, session)
 
     return TableResponse.model_validate(table)
 
@@ -84,17 +101,12 @@ async def close_table(
     user: User = Depends(current_active_user),
     session: AsyncSession = Depends(get_async_session),
 ) -> None:
-    table = await _get_table_model(table_id, session)
-
-    validate_permission(user, table)
+    table = await _get_table_model(table_id, super_permission, user, session)
 
     if table.finished:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Table already finished"
         )
-
-    table.finished = True
-    table.finished_at = datetime.datetime.now()
 
     # Force players to stop playing
     players = table.players
@@ -105,6 +117,9 @@ async def close_table(
                 detail=f"Player with username {p.username} must first leave the table",
             )
 
+    # Close table
+    table.close_table()
+
     await session.commit()
 
 
@@ -114,17 +129,7 @@ async def delete_table(
     user: User = Depends(current_active_user),
     session: AsyncSession = Depends(get_async_session),
 ):
-    table = await _get_table_model(table_id, session)
-
-    if (
-        not user.is_superuser  # Admin
-        and table.owner_id != user.id  # Table owner
-        and table.club.owner_id != user.id  # Club owner
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You do not have permission to delete this table",
-        )
+    table = await _get_table_model(table_id, super_permission, user, session)
 
     await session.delete(table)
     await session.commit()
@@ -136,7 +141,7 @@ async def join_table(
     user: User = Depends(current_active_user),
     session: AsyncSession = Depends(get_async_session),
 ) -> uuid.UUID:
-    table = await _get_table_model(table_id, session)
+    table = await _get_table_model(table_id, None, user, session)
 
     if table.finished:
         raise HTTPException(
@@ -172,63 +177,18 @@ async def get_table_players(
     user: User = Depends(current_active_user),
     session: AsyncSession = Depends(get_async_session),
 ) -> list[PlayerResponse]:
-    table = await _get_table_model(table_id, session)
-
-    validate_permission(user, table)
+    table = await _get_table_model(table_id, member_permission, user, session)
 
     return [PlayerResponse.model_validate(p) for p in table.players]
 
 
-@router.put("/{table_id}/players", status_code=status.HTTP_204_NO_CONTENT)
-async def leave_table(
-    table_id: uuid.UUID,
-    cash_out: int = Query(ge=0),
-    user: User = Depends(current_active_user),
-    session: AsyncSession = Depends(get_async_session),
-):
-    table = await _get_table_model(table_id, session)
-
-    if table.finished:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Table already finished"
-        )
-
-    result = await session.execute(
-        select(Player).where(Player.user_id == user.id, Player.table_id == table_id)
-    )
-    player = result.scalars().first()
-
-    if player is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Player not found"
-        )
-
-    if not player.is_playing:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Player already left"
-        )
-
-    if not (user.is_superuser or player.user_id == user.id):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You do not have permission to get this player",
-        )
-
-    player.cash_out = cash_out
-    player.is_playing = False
-
-    await session.commit()
-
-
-@router.put("/{table_id}/players/{player_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def remove_player(
+async def get_active_player_for_table(
     table_id: uuid.UUID,
     player_id: uuid.UUID,
-    cash_out: int = Query(ge=0),
-    user: User = Depends(current_active_user),
-    session: AsyncSession = Depends(get_async_session),
-):
-    table = await _get_table_model(table_id, session)
+    user: User,
+    session: AsyncSession,
+) -> tuple[GameTable, Player]:
+    table = await _get_table_model(table_id, super_permission, user, session)
 
     if table.finished:
         raise HTTPException(
@@ -244,14 +204,34 @@ async def remove_player(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Player already left"
         )
 
-    if not user.is_superuser and table.owner_id != user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You do not have permission to get this player",
-        )
+    return table, player
 
-    player.cash_out = cash_out
+
+@router.post("/{table_id}/players/{player_id}")
+async def cash_out_player(
+    table_id: uuid.UUID,
+    player_id: uuid.UUID,
+    payload: PayloadRequest,
+    user: User = Depends(current_active_user),
+    session: AsyncSession = Depends(get_async_session),
+):
+    _, player = await get_active_player_for_table(table_id, player_id, user, session)
+    player.cash_out = payload.amount
     player.is_playing = False
+
+    await session.commit()
+
+
+@router.put("/{table_id}/players/{player_id}")
+async def charge_player(
+    table_id: uuid.UUID,
+    player_id: uuid.UUID,
+    payload: PayloadRequest,
+    user: User = Depends(current_active_user),
+    session: AsyncSession = Depends(get_async_session),
+) -> None:
+    _, player = await get_active_player_for_table(table_id, player_id, user, session)
+    player.buy_in += payload.amount
 
     await session.commit()
 
@@ -292,9 +272,7 @@ async def get_table_results(
     user: User = Depends(current_active_user),
     session: AsyncSession = Depends(get_async_session),
 ) -> ResultResponse:
-    table = await _get_table_model(table_id, session)
-
-    validate_permission(user, table)
+    table = await _get_table_model(table_id, member_permission, user, session)
 
     table_response = TableResponse.model_validate(table)
     transactions = get_transactions(
