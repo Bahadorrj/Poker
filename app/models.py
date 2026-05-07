@@ -31,6 +31,7 @@ def now():
     return datetime.datetime.now(tz=datetime.timezone.utc)
 
 
+# Association Tables
 club_members = Table(
     "club_members",
     Base.metadata,
@@ -39,6 +40,7 @@ club_members = Table(
 )
 
 
+# Mapped Tables
 class User(SQLAlchemyBaseUserTableUUID, Base):
     __tablename__ = "users"
 
@@ -133,6 +135,10 @@ class GameTable(Base):
     club: Mapped["Club"] = relationship(
         "Club", foreign_keys=[club_id], back_populates="tables"
     )
+
+    def close_table(self):
+        self.finished = True
+        self.finished_at = now()
 
 
 class Club(Base):
