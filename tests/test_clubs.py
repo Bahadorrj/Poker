@@ -3,12 +3,12 @@ import uuid
 import pytest
 
 from app.models import Club, club_members
-from app.schemas import OpenClubRequest
+from app.schemas import ClubRequest
 
 
 @pytest.fixture(scope="function")
 def club_payload():
-    return OpenClubRequest(name="Test Club").model_dump()
+    return ClubRequest(name="Test Club").model_dump()
 
 
 @pytest.mark.asyncio

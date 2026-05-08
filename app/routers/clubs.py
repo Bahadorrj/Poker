@@ -9,7 +9,7 @@ from starlette import status
 
 from ..db import get_async_session
 from ..models import Club, GameTable, User, club_members
-from ..schemas import ClubResponse, OpenClubRequest, TableResponse, UserRead
+from ..schemas import ClubResponse, ClubRequest, TableResponse, UserRead
 from .auth import current_active_user
 from .tables import join_table
 
@@ -18,7 +18,7 @@ router = APIRouter(prefix="/clubs", tags=["clubs"])
 
 @router.post("/", status_code=status.HTTP_201_CREATED)
 async def open_club(
-    body: OpenClubRequest,
+    body: ClubRequest,
     user: User = Depends(current_active_user),
     session: AsyncSession = Depends(get_async_session),
 ) -> uuid.UUID:

@@ -40,6 +40,17 @@ class PayloadRequest(BaseModel):
     amount: int = Field(ge=0)
 
 
+class ClubRequest(PokerBaseModel):
+    name: str = Field(max_length=256, min_length=4)
+
+
+class ClubResponse(PokerBaseModel):
+    id: uuid.UUID
+    owner_id: uuid.UUID
+    name: str
+    created_at: datetime.datetime
+
+
 class UserHistoryResponse(PokerBaseModel):
     history: list[PlayerResponse]
     net_balance: int
@@ -64,14 +75,3 @@ class TransactionResponse(PokerBaseModel):
 class ResultResponse(PokerBaseModel):
     table: TableResponse
     transactions: list[TransactionResponse]
-
-
-class OpenClubRequest(PokerBaseModel):
-    name: str = Field(max_length=256, min_length=4)
-
-
-class ClubResponse(PokerBaseModel):
-    id: uuid.UUID
-    owner_id: uuid.UUID
-    name: str
-    created_at: datetime.datetime
