@@ -1,23 +1,20 @@
-import uuid
 import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
-from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
-
+from sqlalchemy.orm import selectinload
 from starlette import status
 
 from ..db import get_async_session
-from ..models import GameTable, User, Player
+from ..models import GameTable, Player, User
 from ..schemas import (
+    PlayerResponse,
+    UserHistoryResponse,
     UserRead,
     UserUpdate,
-    UserHistoryResponse,
-    PlayerResponse,
 )
-
-from .auth import fastapi_users, current_active_user
+from .auth import current_active_user, fastapi_users
 
 router = APIRouter()
 

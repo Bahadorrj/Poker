@@ -9,7 +9,7 @@ from starlette import status
 
 from ..db import get_async_session
 from ..models import Club, GameTable, User, club_members
-from ..schemas import ClubResponse, ClubRequest, TableResponse, UserRead
+from ..schemas import ClubRequest, ClubResponse, TableResponse, UserRead
 from .auth import current_active_user
 from .tables import join_table
 

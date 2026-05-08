@@ -3,7 +3,7 @@ from collections.abc import AsyncGenerator
 
 from fastapi import Depends
 from fastapi_users.db import SQLAlchemyUserDatabase
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from .models import Base, User
 
@@ -12,7 +12,9 @@ if DATABASE_URL is None:
     raise EnvironmentError("DATABASE_URL not found")
 
 engine = create_async_engine(DATABASE_URL, echo=False, future=True)
-async_session_maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+async_session_maker = async_sessionmaker(
+    engine, class_=AsyncSession, expire_on_commit=False
+)
 
 
 async def create_db_and_tables():
