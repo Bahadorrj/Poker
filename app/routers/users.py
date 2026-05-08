@@ -71,7 +71,7 @@ async def get_history_response(session: AsyncSession, user: User):
         if g.finished_at is None:
             raise ValueError("invalid finish time")
 
-        time_delta += g.finished_at - g.started_at
+        time_delta += g.finished_at - g.created_at
 
     hours, rest = divmod(time_delta, datetime.timedelta(hours=1))
     minutes, rest = divmod(rest, datetime.timedelta(minutes=1))

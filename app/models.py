@@ -40,18 +40,21 @@ club_members = Table(
 )
 
 
+class TimeStampMixin:
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime,
+        default=now,
+    )
+
+
 # Mapped Tables
-class User(SQLAlchemyBaseUserTableUUID, Base):
+class User(SQLAlchemyBaseUserTableUUID, TimeStampMixin, Base):
     __tablename__ = "users"
 
     id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
     username: Mapped[str] = mapped_column(String, unique=True)
-    created_at: Mapped[datetime.datetime] = mapped_column(
-        DateTime,
-        default=now,
-    )
 
     tables: Mapped[list["GameTable"]] = relationship(
         "GameTable", back_populates="owner", cascade="all, delete-orphan"
@@ -70,7 +73,7 @@ class User(SQLAlchemyBaseUserTableUUID, Base):
     )
 
 
-class Player(Base):
+class Player(TimeStampMixin, Base):
     __tablename__ = "players"
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -101,7 +104,7 @@ class Player(Base):
     )
 
 
-class GameTable(Base):
+class GameTable(TimeStampMixin, Base):
     __tablename__ = "game_tables"
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -116,7 +119,6 @@ class GameTable(Base):
         ForeignKey("clubs.id"),
     )
     finished: Mapped[bool] = mapped_column(Boolean, default=False)
-    started_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=now)
     finished_at: Mapped[datetime.datetime | None] = mapped_column(
         DateTime, default=None
     )
@@ -141,7 +143,7 @@ class GameTable(Base):
         self.finished_at = now()
 
 
-class Club(Base):
+class Club(TimeStampMixin, Base):
     __tablename__ = "clubs"
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -153,7 +155,6 @@ class Club(Base):
         Uuid(as_uuid=True),
         ForeignKey("users.id"),
     )
-    opened_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=now)
 
     owner: Mapped[User] = relationship(
         User,

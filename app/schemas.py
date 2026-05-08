@@ -30,6 +30,7 @@ class PlayerResponse(PokerBaseModel):
     cash_out: int = Field(ge=0)
     is_playing: bool = True
 
+
 class PlayerUpdate(BaseModel):
     buy_in: int = Field(ge=0)
     cash_out: int = Field(ge=0)
@@ -50,7 +51,7 @@ class TableResponse(PokerBaseModel):
     owner_id: uuid.UUID
     bank: int = Field(ge=0)
     finished: bool
-    started_at: datetime.datetime
+    created_at: datetime.datetime
     finished_at: datetime.datetime | None = None
 
 
@@ -73,4 +74,4 @@ class ClubResponse(PokerBaseModel):
     id: uuid.UUID
     owner_id: uuid.UUID
     name: str
-    opened_at: datetime.datetime
+    created_at: datetime.datetime

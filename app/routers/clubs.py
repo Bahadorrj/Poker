@@ -51,7 +51,7 @@ async def open_club(
 async def get_clubs(
     session: AsyncSession = Depends(get_async_session),
 ) -> list[ClubResponse]:
-    result = await session.execute(select(Club).order_by(Club.opened_at.desc()))
+    result = await session.execute(select(Club).order_by(Club.created_at.desc()))
     clubs: list[Club] = [row[0] for row in result.all()]
 
     return [ClubResponse.model_validate(c) for c in clubs]
@@ -198,7 +198,7 @@ async def leave_club(
             detail="You do not have permission to complete this action",
         )
 
-    club = await get_club_model(club_id,session)
+    club = await get_club_model(club_id, session)
     if member.user_id == club.owner_id:
         raise HTTPException(
             status_code=status.HTTP_406_NOT_ACCEPTABLE,
