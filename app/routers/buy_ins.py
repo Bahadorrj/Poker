@@ -8,7 +8,7 @@ from sqlalchemy.orm import selectinload
 from starlette import status
 
 from ..db import get_async_session
-from ..models import BuyInTransaction, Player, User
+from ..models import BuyInTransaction, Club, GameTable, Player, User
 from ..schemas import BuyInResponse, BuyInUpdate
 from .auth import current_active_user
 from .tables import member_permission, super_permission
@@ -46,7 +46,10 @@ async def _get_buy_in_model(
     buy_in = await get_buy_in_model(
         transaction_id,
         session,
-        selectinload(BuyInTransaction.player).selectinload(Player.table),
+        selectinload(BuyInTransaction.player)
+        .selectinload(Player.table)
+        .selectinload(GameTable.club)
+        .selectinload(Club.members),
     )
 
     if permission:
