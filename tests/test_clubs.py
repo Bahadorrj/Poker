@@ -11,7 +11,6 @@ def club_payload():
     return ClubRequest(name="Test Club").model_dump()
 
 
-@pytest.mark.asyncio
 class TestOpenClub:
     async def test_response_status_code(self, client, club_payload):
         response = await client.post("/clubs/", json=club_payload)
@@ -40,7 +39,6 @@ class TestOpenClub:
         assert test_user.id in member_ids
 
 
-@pytest.mark.asyncio
 class TestGetClubs:
     async def test_no_clubs(self, client):
         response = await client.get("/clubs/")
@@ -57,7 +55,6 @@ class TestGetClubs:
         assert response.json()[0]["id"] == club_id
 
 
-@pytest.mark.asyncio
 async def test_get_club(client, club_payload):
     response = await client.post("/clubs/", json=club_payload)
     club_id = response.json()
@@ -66,7 +63,6 @@ async def test_get_club(client, club_payload):
     assert response.status_code == 200
 
 
-@pytest.mark.asyncio
 class TestDeleteClub:
     async def test_forbidden(self, client, db_session, other_user):
         club_id = uuid.uuid4()
@@ -106,7 +102,6 @@ class TestDeleteClub:
         assert response.status_code == 204
 
 
-@pytest.mark.asyncio
 class TestJoinClub:
     async def test_member_already_exists(self, client, club_payload):
         response = await client.post("/clubs/", json=club_payload)
