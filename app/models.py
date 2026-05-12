@@ -157,7 +157,9 @@ class GameTable(TimeStampMixin, Base):
     owner: Mapped[User] = relationship(
         User, back_populates="tables", foreign_keys=[owner_id]
     )
-    players: Mapped[list[Player]] = relationship(Player, back_populates="table")
+    players: Mapped[list[Player]] = relationship(
+        Player, back_populates="table", cascade="all, delete-orphan"
+    )
     club: Mapped["Club"] = relationship(
         "Club", foreign_keys=[club_id], back_populates="tables"
     )
@@ -191,4 +193,6 @@ class Club(TimeStampMixin, Base):
         secondary=club_members,
         back_populates="member_of_clubs",
     )
-    tables: Mapped[list[GameTable]] = relationship("GameTable", back_populates="club")
+    tables: Mapped[list[GameTable]] = relationship(
+        "GameTable", back_populates="club", cascade="all, delete-orphan"
+    )
