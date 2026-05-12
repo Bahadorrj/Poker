@@ -8,7 +8,7 @@ from sqlalchemy.orm import selectinload
 from starlette import status
 
 from ..db import get_async_session
-from ..models import Club, GameTable, Player, User
+from ..models import BuyInTransaction, Club, GameTable, Player, User
 from ..schemas import (
     PayloadRequest,
     PlayerResponse,
@@ -231,7 +231,9 @@ async def charge_player(
     session: AsyncSession = Depends(get_async_session),
 ) -> None:
     _, player = await get_active_player_for_table(table_id, player_id, user, session)
-    player.buy_in += payload.amount
+
+    buy_in = BuyInTransaction(player_id=player_id, amount=payload.amount)
+    session.add(buy_in)
 
     await session.commit()
 

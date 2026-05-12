@@ -3,13 +3,13 @@ from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 load_dotenv()
 
 from .db import create_db_and_tables
-from .routers import auth, users, clubs, players, tables
+from .routers import auth, buy_ins, clubs, players, tables, users
 
 logger = logging.getLogger(__name__)
 
@@ -57,3 +57,6 @@ app.include_router(tables.router)
 
 # Players
 app.include_router(players.router)
+
+# Buy-ins
+app.include_router(buy_ins.router)

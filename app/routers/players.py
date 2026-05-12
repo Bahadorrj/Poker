@@ -1,5 +1,5 @@
 import uuid
-from typing import Any
+from typing import Any, Callable
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
@@ -7,10 +7,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from starlette import status
 
+from .auth import current_active_user
+from .tables import member_permission, super_permission
 from ..db import get_async_session
 from ..models import Club, GameTable, Player, User
 from ..schemas import PlayerResponse, PlayerUpdate
-from .auth import current_active_user
 
 router = APIRouter(prefix="/players", tags=["players"])
 
@@ -38,11 +39,10 @@ async def get_player_model(
 
 async def _get_player_model(
     player_id: uuid.UUID,
+    permission: Callable,
     user: User,
     session: AsyncSession,
 ) -> Player:
-    from .tables import member_permission
-
     player = await get_player_model(
         player_id,
         session,
@@ -51,8 +51,8 @@ async def _get_player_model(
         .selectinload(Club.members),
     )
 
-    if not user.is_superuser:  # Admin
-        member_permission(user, player.table)
+    if permission:
+        permission(user, player.table)
 
     return player
 
@@ -63,7 +63,7 @@ async def get_player(
     user: User = Depends(current_active_user),
     session: AsyncSession = Depends(get_async_session),
 ) -> PlayerResponse:
-    player = await _get_player_model(player_id, user, session)
+    player = await _get_player_model(player_id, member_permission, user, session)
 
     return PlayerResponse.model_validate(player)
 
@@ -75,19 +75,8 @@ async def update_player(
     user: User = Depends(current_active_user),
     session: AsyncSession = Depends(get_async_session),
 ):
-    player = await get_player_model(
-        player_id,
-        session,
-        selectinload(Player.table)
-        .selectinload(GameTable.club)
-        .selectinload(Club.members),
-    )
+    player = await _get_player_model(player_id, super_permission, user, session)
 
-    from .tables import super_permission
-
-    super_permission(user, player.table)
-
-    player.buy_in = player_update.buy_in
     player.cash_out = player_update.cash_out
 
     await session.commit()
@@ -99,7 +88,7 @@ async def delete_player(
     user: User = Depends(current_active_user),
     session: AsyncSession = Depends(get_async_session),
 ):
-    player = await _get_player_model(player_id, user, session)
+    player = await _get_player_model(player_id, super_permission, user, session)
 
     await session.delete(player)
     await session.commit()

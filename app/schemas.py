@@ -1,8 +1,8 @@
 import datetime
 import uuid
 
-from pydantic import BaseModel, ConfigDict, Field
 from fastapi_users import schemas
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class UserRead(schemas.BaseUser[uuid.UUID]):
@@ -31,12 +31,20 @@ class PlayerResponse(PokerBaseModel):
     is_playing: bool = True
 
 
-class PlayerUpdate(BaseModel):
-    buy_in: int = Field(ge=0)
+class PlayerUpdate(PokerBaseModel):
     cash_out: int = Field(ge=0)
 
 
-class PayloadRequest(BaseModel):
+class PayloadRequest(PokerBaseModel):
+    amount: int = Field(ge=0)
+
+
+class BuyInResponse(PokerBaseModel):
+    id: uuid.UUID
+    amount: int = Field(ge=0)
+
+
+class BuyInUpdate(PokerBaseModel):
     amount: int = Field(ge=0)
 
 

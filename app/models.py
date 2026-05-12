@@ -73,6 +73,22 @@ class User(SQLAlchemyBaseUserTableUUID, TimeStampMixin, Base):
     )
 
 
+class BuyInTransaction(TimeStampMixin, Base):
+    __tablename__ = "buy_ins"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    player_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("players.id")
+    )
+    amount: Mapped[int] = mapped_column(Integer)
+
+    player: Mapped["Player"] = relationship(
+        "Player", back_populates="buy_ins", foreign_keys=[player_id]
+    )
+
+
 class Player(TimeStampMixin, Base):
     __tablename__ = "players"
 
@@ -85,7 +101,6 @@ class Player(TimeStampMixin, Base):
     table_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("game_tables.id")
     )
-    buy_in: Mapped[int] = mapped_column(Integer, default=0)
     cash_out: Mapped[int] = mapped_column(Integer, default=0)
     is_playing: Mapped[bool] = mapped_column(Boolean, default=True)
 
@@ -95,7 +110,16 @@ class Player(TimeStampMixin, Base):
     user: Mapped[User] = relationship(
         User, back_populates="players", foreign_keys=[user_id]
     )
+    buy_ins: Mapped[list[BuyInTransaction]] = relationship(
+        BuyInTransaction, back_populates="player", cascade="all, delete-orphan"
+    )
 
+    buy_in: Mapped[int] = column_property(
+        select(func.coalesce(func.sum(BuyInTransaction.amount), 0))
+        .where(BuyInTransaction.player_id == id)
+        .correlate_except(BuyInTransaction)
+        .scalar_subquery()
+    )
     username: Mapped[str] = column_property(
         select(User.username)
         .where(User.id == user_id)
