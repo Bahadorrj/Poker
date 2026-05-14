@@ -241,7 +241,12 @@ async def charge_player(
 def get_transactions(players: Iterable[PlayerResponse]) -> list[TransactionResponse]:
     net_balances = {p.username: p.cash_out - p.buy_in for p in players}
     positives = {k: v for k, v in net_balances.items() if v > 0}
+    # Sort from highest to lowest
+    positives = dict(sorted(positives.items(), key=lambda item: item[1], reverse=True))
     negatives = {k: -v for k, v in net_balances.items() if v < 0}
+    # Sort from lowest to highest
+    negatives = dict(sorted(positives.items(), key=lambda item: item[1]))
+    # This way, the transactions are more logical
 
     transactions = []
     for getter, money in positives.items():
