@@ -99,7 +99,7 @@ async def get_club_model(
     return club
 
 
-async def get_member_model(
+async def get_member_row(
     club_id: uuid.UUID,
     user_id: uuid.UUID,
     session: AsyncSession,
@@ -191,7 +191,7 @@ async def leave_club(
     session: AsyncSession = Depends(get_async_session),
 ):
     # Get member
-    member = await get_member_model(club_id, user.id, session)
+    member = await get_member_row(club_id, user.id, session)
 
     if (
         not user.is_superuser  # Admin
