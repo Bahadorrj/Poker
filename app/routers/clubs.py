@@ -16,6 +16,26 @@ from .tables import join_table
 router = APIRouter(prefix="/clubs", tags=["clubs"])
 
 
+async def _add_member(club_id: uuid.UUID, user_id: uuid.UUID, session: AsyncSession):
+    # Internal helper — shared by open_club and join_club so neither has to call
+    # the other as a path function (which would bypass FastAPI's dependency system).
+    result = await session.execute(
+        select(club_members).where(
+            club_members.c.user_id == user_id,
+            club_members.c.club_id == club_id,
+        )
+    )
+    if result.first():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Member already exists",
+        )
+    await session.execute(
+        club_members.insert().values(club_id=club_id, user_id=user_id)
+    )
+    await session.commit()
+
+
 @router.post("/", status_code=status.HTTP_201_CREATED)
 async def open_club(
     body: ClubRequest,
@@ -41,8 +61,8 @@ async def open_club(
     await session.commit()
     await session.refresh(club)
 
-    # Join immediately
-    await join_club(club.id, user, session)
+    # Add the owner as a member
+    await _add_member(club.id, user.id, session)
 
     return club.id
 
@@ -131,28 +151,12 @@ async def join_club(
     user: User = Depends(current_active_user),
     session: AsyncSession = Depends(get_async_session),
 ):
-    # Check club exists (raise not found error if not)
+    # Verify the club exists first.
     await get_club_model(club_id, session)
-
-    # Check member does not exist
-    result = await session.execute(
-        select(club_members).where(
-            club_members.c.user_id == user.id, club_members.c.club_id == club_id
-        )
-    )
-    member = result.first()
-    if member:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Member already exists",
-        )
 
     # TODO: send a request to club owner to approve the new member before adding them
 
-    await session.execute(
-        club_members.insert().values(club_id=club_id, user_id=user.id)
-    )
-    await session.commit()
+    await _add_member(club_id, user.id, session)
 
 
 def validate_permission(user: User, club: Club):
@@ -202,7 +206,7 @@ async def leave_club(
     if member.user_id == club.owner_id:
         raise HTTPException(
             status_code=status.HTTP_406_NOT_ACCEPTABLE,
-            detail="Club owner can not leave the club",
+            detail="Club owner cannot leave the club",
         )
 
     await session.execute(
@@ -310,7 +314,6 @@ async def get_leaderboard(
             if username not in leaderboard:
                 leaderboard[username] = 0
 
-            net_balance = player.cash_out - player.buy_in
-            leaderboard[username] += net_balance
+            leaderboard[username] += player.cash_out - player.buy_in
 
     return dict(sorted(leaderboard.items(), key=lambda item: item[1]))
