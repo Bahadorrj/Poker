@@ -212,7 +212,7 @@ async def leave_club(
     await session.execute(
         club_members.delete().where(
             club_members.c.club_id == club_id,
-            club_members.c.user_id == member.id,
+            club_members.c.user_id == member.user_id,
         )
     )
     await session.commit()
